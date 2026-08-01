@@ -14,8 +14,13 @@ description: "Modo High Stakes: motor de rigor para DECISÃO de alto risco e amb
 O core viaja dentro do pacote Python. Descubra onde ele está:
 
 ```bash
-python3 -m high_stakes.paths core
+<raiz-do-plugin>/bin/high-stakes paths core
 ```
+
+> **A raiz do plugin** é dois níveis acima deste arquivo (este é
+> `<raiz>/skills/high-stakes/SKILL.md`). Use `${CLAUDE_PLUGIN_ROOT}` se o harness a
+> expuser. **Sempre invoque pelo `bin/high-stakes`**: `python3 -m high_stakes.X` só
+> funciona se o pacote já estiver no `sys.path`, o que é falso numa instalação limpa.
 
 **Antes de executar cada passo, leia a seção correspondente.** É instrução dura: ler no
 começo e trabalhar de memória depois é como se produz um dossiê raso.
@@ -42,12 +47,13 @@ começo e trabalhar de memória depois é como se produz um dossiê raso.
 ## Caminhos e comandos desta instalação
 
 ```bash
-python3 -m high_stakes.config          # config efetivo + de onde cada coisa veio
-python3 -m high_stakes.paths core      # contratos      (dentro do pacote)
-python3 -m high_stakes.paths boards    # lentes que vêm na instalação
+bin/high-stakes config          # config efetivo + de onde cada coisa veio
+bin/high-stakes paths core      # contratos       (dentro do pacote)
+bin/high-stakes paths boards    # lentes que vêm na instalação
+bin/high-stakes paths examples  # o dossiê de referência que a regra R1 manda abrir
 ```
 
-- **Roster de modelos:** `python3 -m high_stakes.config` mostra o `pin_path` em vigor. O
+- **Roster de modelos:** `bin/high-stakes config` mostra o `pin_path` em vigor. O
   arquivo do usuário (`$HIGH_STAKES_HOME/roster-pin.yaml`, padrão `~/.high-stakes/`) ganha
   do que vem embarcado. **Congela dentro de um loop** — trocar juiz no meio mata a
   comparação entre rodadas.
@@ -75,9 +81,9 @@ ser **relidas no ato do render** — ter lido no começo do fluxo não conta. Os
 comandos, todos com exit 0 obrigatório antes de entregar:
 
 ```bash
-python3 -m high_stakes.render_gate    <report.md>              # estrutura §0–§7 + jargão
-python3 -m high_stakes.qverify        <report.md> <cells_dir>  # toda quote é verbatim
-python3 -m high_stakes.render_dossier <report.md>              # HTML single-file
+bin/high-stakes render_gate    <report.md>              # estrutura §0–§7 + jargão
+bin/high-stakes qverify        <report.md> <cells_dir>  # toda quote é verbatim
+bin/high-stakes render_dossier <report.md>              # HTML single-file
 ```
 
 **Toda quote atribuída leva `(lente simulada · <modelo>)` na própria linha**, e o §Escopo

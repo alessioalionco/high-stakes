@@ -10,7 +10,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from high_stakes.qverify import verify
+from high_stakes.qverify import _advisor_for, verify
 
 CELL_UNIT ECONOMIST = {
     "advisor": "unit economist", "status": "ok",
@@ -173,6 +173,20 @@ def main() -> int:
                  and find("4.3", "epigrafe")["status"] == "epigrafe_ausente"),
             case("REGRESSÃO A1: célula do xverify é reconhecida como refutador e tem corpus",
                  refuter_contract_ok()),
+            # REGRESSÃO: o gate de render conta como atribuída qualquer linha com
+            # "— **Nome**"; o parse estrito exige fim de linha. A diferença fazia a quote
+            # SUMIR do verificador, que então imprimia VERDE sem tê-la checado. Achado em
+            # dossiê real: 18 linhas atribuídas, 17 extraídas, 1 invisível.
+            case("REGRESSÃO: atribuição que o gate conta e o parse não captura vira "
+                 "atribuicao_malformada (não some)",
+                 any(f["status"] == "atribuicao_malformada" for f in verify(
+                     '## §1 x\n### 1.1 y\n> "Uma quote com parêntese quebrado." '
+                     '— **The Unit Economist** (via Gemini 3.1\n', cells))),
+            case("REGRESSÃO: lente FORA da lista fixa antiga resolve pelo corpus "
+                 "(o pool embarcado tem 13, a lista tinha 7)",
+                 _advisor_for("The Movement Builder", ["movement builder", "unit economist"]) == "movement builder"),
+            case("papel ainda vence o nome dentro do heading",
+                 _advisor_for("Anti-tese do The Unit Economist", ["unit economist"]) == "antitese"),
         ]
         print(f"{sum(results)}/{len(results)} testes ok")
         return 0 if all(results) else 1

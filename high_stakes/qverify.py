@@ -26,16 +26,20 @@ import json
 import re
 import sys
 import unicodedata
+from typing import Iterable
 from pathlib import Path
 
 # Nome exibido -> advisor key. PAPÉIS primeiro: "Anti-tese do The Unit Economist" resolve pro papel,
 # não pro nome que aparece dentro do heading.
-ADVISOR_KEYS = [
+# PAPÉIS: resolvem antes do nome ("Anti-tese do The Unit Economist" é o papel, não o The Unit Economist).
+ROLE_KEYS = [
     ("anti-tese", "antitese"), ("antítese", "antitese"), ("antitese", "antitese"),
     ("refutador", "refuter"), ("generalista", "generalista"),
-    ("unit economist", "unit economist"), ("model theorist", "model theorist"), ("cohort analyst", "cohort analyst"), ("benchmark operator", "benchmark operator"),
-    ("market maximalist", "market maximalist"), ("execution hardliner", "execution hardliner"), ("platform steward", "platform steward"),
 ]
+# NÃO existe lista fixa de conselheiros. Havia uma, com 7 sobrenomes, enquanto o pool
+# embarcado tem 13 e o usuário pode escrever os dele: qualquer lente fora da lista
+# resolvia para None e TODA quote dela virava "atribuicao_divergente" — vermelho
+# permanente num gate que deveria ser silencioso. As chaves vêm do corpus das células.
 
 # Atribuição SÓ no fim da linha (com "(via ...)" opcional depois do nome).
 ATTRIB_END_RE = re.compile(
@@ -110,12 +114,23 @@ def _joined_quotes(report_md: str) -> list[tuple[str, str]]:
     return out
 
 
-def _advisor_for(name: str) -> str | None:
+def _sem_acento(s: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFD", s)
+                   if unicodedata.category(c) != "Mn")
+
+
+def _advisor_for(name: str, corpus_keys: Iterable[str] = ()) -> str | None:
+    """Nome exibido -> chave de conselheiro. Papéis primeiro, depois as chaves REAIS
+    das células daquele run (ordenadas da mais longa para a mais curta, para que
+    'unit economist-antitese' não case antes com 'unit economist')."""
     n = normalize(name)
-    n_sem_acento = "".join(c for c in unicodedata.normalize("NFD", n)
-                           if unicodedata.category(c) != "Mn")
-    for token, key in ADVISOR_KEYS:
-        if token in n or token in n_sem_acento:
+    ns = _sem_acento(n)
+    for token, key in ROLE_KEYS:
+        if token in n or token in ns:
+            return key
+    for key in sorted(corpus_keys, key=len, reverse=True):
+        k = normalize(str(key))
+        if k and (k in n or _sem_acento(k) in ns):
             return key
     return None
 
@@ -151,12 +166,32 @@ def _match(qnorm: str, corpus: dict[str, list[str]], advisor: str | None) -> tup
     return "unverified", ""
 
 
+# Detecção FROUXA — a mesma forma que o gate de render usa para contar quotes. Serve para
+# achar linhas que SÃO atribuição; o parse estrito vem depois. Sem isto, uma linha com
+# qualquer texto após o parêntese passava no gate e era INVISÍVEL aqui: o verificador
+# imprimia "VERDE — 0/0" sem ter verificado nada. Gate anti-fabricação falhando ABERTO.
+ATTRIB_LOOSE_RE = re.compile(r"—\s*\*\*.+?\*\*")
+
+
+def _malformed_attributions(report_md: str) -> list[str]:
+    """Linhas de quote que o gate conta como atribuídas e o parse estrito não captura."""
+    ruins = []
+    for ln in report_md.splitlines():
+        if ln.startswith(">") and ATTRIB_LOOSE_RE.search(ln):
+            if not ATTRIB_END_RE.search(ln.lstrip("> ").rstrip()):
+                ruins.append(ln.strip())
+    return ruins
+
+
 def verify(report_md: str, cells_dir: Path) -> list[dict]:
     corpus = cell_corpus(cells_dir)
     findings = []
+    for ln in _malformed_attributions(report_md):
+        findings.append({"tipo": "quote", "advisor": "?", "status": "atribuicao_malformada",
+                         "onde": "", "quote": ln[:120]})
     for text, name in _joined_quotes(report_md):
         qnorm = normalize(text)
-        advisor = _advisor_for(name)
+        advisor = _advisor_for(name, corpus.keys())
         if len(qnorm) < MIN_QUOTE:
             findings.append({"tipo": "quote", "advisor": advisor or name,
                              "status": "curta_nao_verificavel", "onde": "",
@@ -170,7 +205,7 @@ def verify(report_md: str, cells_dir: Path) -> list[dict]:
     if sec4:
         for h, b in re.findall(r"### (4\.\d[^\n]*)\n(.*?)(?=\n### |\Z)", sec4.group(1),
                                re.DOTALL):
-            advisor = _advisor_for(h)
+            advisor = _advisor_for(h, corpus.keys())
             m = re.search(r'\*["“]([^*]+?)["”]\*', b, re.DOTALL)  # tolera epígrafe quebrada
             if not m:
                 findings.append({"tipo": "epigrafe", "advisor": advisor or h[:20],
@@ -202,6 +237,13 @@ def main() -> int:
             print(f"  ✗ [{f['tipo']}|{f['advisor']}|{f['status']}]{extra} \"{f['quote']}\"")
         print("Corrigir pro verbatim do card (ou remover) e re-rodar. "
               "Quote não-verificada não vai pro decisor.")
+        return 1
+    if not findings and ATTRIB_LOOSE_RE.search(report.read_text()):
+        # "VERDE — 0/0" num dossiê QUE TEM atribuições significa que o verificador não
+        # entendeu nenhuma delas, não que estão todas certas. Verde vazio é falso verde.
+        print("VERIFICAÇÃO DE QUOTES VERMELHA: o dossiê tem quotes atribuídas e NENHUMA "
+              "foi extraída — a forma da atribuição não bate com o contrato "
+              '(> "texto." — **Nome** (lente simulada · <modelo>)).')
         return 1
     print(f"VERIFICAÇÃO DE QUOTES VERDE — {ok}/{len(findings)} verificadas por código.")
     return 0

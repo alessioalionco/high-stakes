@@ -86,8 +86,11 @@ alteradas — cortes, emendas, uma frase inteira acrescentada. Nenhuma foi inten
 ## Configuração
 
 ```bash
-python3 -m high_stakes.config     # mostra o config efetivo e de onde cada coisa veio
+bin/high-stakes config     # mostra o config efetivo e de onde cada coisa veio
 ```
+
+Os comandos vão pelo `bin/high-stakes`, que resolve a raiz do pacote a partir da própria
+localização — funciona de qualquer diretório, sem instalação e sem `PYTHONPATH`.
 
 Precedência: argumento explícito > variável de ambiente > `./.high-stakes.toml` >
 `~/.high-stakes/config.toml` > default.

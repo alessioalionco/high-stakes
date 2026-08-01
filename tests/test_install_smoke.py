@@ -46,15 +46,27 @@ def main() -> int:
         results.append(bool(cond))
 
     # ---- ambiente de estranho: sem nenhuma variável do produto, sem chave ----
+    # SEM PYTHONPATH: era exatamente a condição que falta na máquina de quem instala.
+    # Injetá-la fazia o smoke passar 19/19 enquanto `python3 -m high_stakes.paths` dava
+    # ModuleNotFoundError de qualquer cwd real — o teste escondia o defeito que existia
+    # para pegar. Os comandos agora vão pelo launcher, como o adapter manda.
     env = {k: v for k, v in os.environ.items()
-           if not k.startswith("HIGH_STAKES_") and k not in ("OPENROUTER_API_KEY",)}
-    env["PYTHONPATH"] = str(ROOT)
+           if not k.startswith("HIGH_STAKES_")
+           and k not in ("OPENROUTER_API_KEY", "PYTHONPATH")}
     env["PYTHONDONTWRITEBYTECODE"] = "1"
+    LAUNCHER = str(ROOT / "bin" / "high-stakes")
 
     tmp = Path(tempfile.mkdtemp())  # cwd que NÃO é o repo
     try:
         def run(*args, cwd=tmp):
-            return subprocess.run([sys.executable, *args], cwd=cwd, env=env,
+            """Invoca pelo LAUNCHER — o caminho real de quem instalou o plugin."""
+            return subprocess.run([LAUNCHER, *args], cwd=cwd, env=env,
+                                  capture_output=True, text=True)
+
+        def run_lib(*args, cwd=tmp):
+            """Uso como BIBLIOTECA (import em script próprio): aí sim PYTHONPATH."""
+            e = dict(env); e["PYTHONPATH"] = str(ROOT)
+            return subprocess.run([sys.executable, *args], cwd=cwd, env=e,
                                   capture_output=True, text=True)
 
         # ---- a promessa de capa ----
@@ -67,29 +79,37 @@ def main() -> int:
              'dependencies = []' in (ROOT / "pyproject.toml").read_text())
 
         # ---- importa de fora do repo, sem env nenhum ----
-        r = run("-c", "import high_stakes.or_client, high_stakes.render_dossier, "
-                      "high_stakes.qverify, high_stakes.quick_panel, high_stakes.config; print('ok')")
-        case("pacote importa de um diretório qualquer, sem variáveis de ambiente",
+        r = run_lib("-c", "import high_stakes.or_client, high_stakes.render_dossier, "
+                          "high_stakes.qverify, high_stakes.quick_panel, high_stakes.config; print('ok')")
+        case("como biblioteca: importa de diretório qualquer com PYTHONPATH",
              r.returncode == 0 and "ok" in r.stdout, r.stderr[-200:])
 
+        case("REGRESSÃO: o launcher existe e é executável",
+             os.access(LAUNCHER, os.X_OK))
+        r_nu = subprocess.run([sys.executable, "-m", "high_stakes.paths", "core"],
+                              cwd=tmp, env=env, capture_output=True, text=True)
+        case("REGRESSÃO: `python3 -m high_stakes.X` SEM PYTHONPATH falha — é por isso "
+             "que o adapter documenta o launcher, não o -m",
+             r_nu.returncode != 0 and "ModuleNotFoundError" in r_nu.stderr)
+
         # ---- os comandos que o adapter chama ----
-        r = run("-m", "high_stakes.paths", "core")
+        r = run("paths", "core")
         case("`paths core` responde caminho existente de fora do repo",
              r.returncode == 0 and Path(r.stdout.strip()).is_dir(), r.stderr[-200:])
 
-        r = run("-m", "high_stakes.config")
+        r = run("config")
         case("`config` roda sem HOME criado e sem chave, e AVISA que a chave falta",
              r.returncode == 0 and "AUSENTE" in r.stdout, r.stderr[-200:])
         case("`config` cai nos boards embarcados quando o usuário não tem os dele",
              "high-stakes/boards" in r.stdout.replace(os.sep, "/"), r.stdout[-200:])
 
         # ---- o gate e o render, ponta a ponta, sobre o exemplo ----
-        r = run("-m", "high_stakes.render_gate", str(ROOT / "examples" / "sample-dossier.md"))
+        r = run("render_gate", str(ROOT / "examples" / "sample-dossier.md"))
         case("gate de render sai 0 no dossiê de exemplo, rodado de fora do repo",
              r.returncode == 0, r.stdout[-300:])
 
         out_html = tmp / "saida.html"
-        r = run("-m", "high_stakes.render_dossier",
+        r = run("render_dossier",
                 str(ROOT / "examples" / "sample-dossier.md"), str(out_html))
         case("render produz HTML de fora do repo", r.returncode == 0 and out_html.exists(),
              r.stderr[-200:])
@@ -101,10 +121,10 @@ def main() -> int:
                  len(h) > 20000)
 
         # ---- erro de uso não pode ser stack trace ----
-        r = run("-m", "high_stakes.render_gate")
+        r = run("render_gate")
         case("gate sem argumento sai 2 com mensagem de uso, não stack trace",
              r.returncode == 2 and "Traceback" not in r.stderr)
-        r = run("-m", "high_stakes.render_gate", str(tmp / "nao-existe.md"))
+        r = run("render_gate", str(tmp / "nao-existe.md"))
         case("gate em arquivo inexistente sai 1 com mensagem, não stack trace",
              r.returncode == 1 and "Traceback" not in r.stderr)
 

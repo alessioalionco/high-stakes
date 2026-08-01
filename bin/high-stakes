@@ -1,0 +1,31 @@
+#!/bin/sh
+# high-stakes — ponto de entrada dos comandos do motor.
+#
+# Existe porque `python3 -m high_stakes.X` só funciona se o pacote já estiver no
+# sys.path — o que é verdade no repositório do autor e falso na máquina de quem instala
+# o plugin. O sintoma era ModuleNotFoundError de qualquer diretório real, e o smoke test
+# não pegava porque ele mesmo setava PYTHONPATH.
+#
+# Este script resolve a raiz do pacote a partir da PRÓPRIA localização, então funciona de
+# qualquer cwd, sem instalação, sem variável de ambiente e sem pip.
+#
+#   bin/high-stakes render_gate <report.md>
+#   bin/high-stakes qverify <report.md> <cells_dir>
+#   bin/high-stakes render_dossier <report.md> [out.html]
+#   bin/high-stakes paths core
+#   bin/high-stakes config
+set -eu
+
+if [ "$#" -lt 1 ]; then
+    echo "uso: high-stakes <comando> [args...]" >&2
+    echo "comandos: render_gate · qverify · render_dossier · paths · config" >&2
+    exit 2
+fi
+
+# dirname do próprio script -> raiz da instalação (um nível acima de bin/)
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+CMD="$1"
+shift
+
+exec env PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" \
+     python3 -m "high_stakes.$CMD" "$@"

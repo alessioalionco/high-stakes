@@ -28,8 +28,8 @@ não deve fabricar citações atribuídas a pessoas reais.
 ## Regenerar
 
 ```bash
-python3 -m high_stakes.render_gate     examples/sample-dossier.md   # exit 0 obrigatório
-python3 -m high_stakes.render_dossier  examples/sample-dossier.md examples/sample-dossier.html
+bin/high-stakes render_gate    examples/sample-dossier.md   # exit 0 obrigatório
+bin/high-stakes render_dossier examples/sample-dossier.md examples/sample-dossier.html
 ```
 
 **Nada aqui pode conter dado real** — empresa, receita, cliente ou nome de conselheiro de
