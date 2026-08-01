@@ -237,6 +237,20 @@ def main() -> int:
             except LeakBlocked:
                 case(f"C8: token {tok!r} segue sem recusar {onde!r}", False)
 
+        # C9 — o ramo de IGUALDADE do (2a), sozinho. Achado por teste de mutação: matando
+        # `any(ts == w ...)` nenhum teste ficava vermelho, porque todo caso que o exercia
+        # também passava pelo ramo de substring. O ramo só é a única rede para token
+        # MULTI-PALAVRA curto demais para o substring (squash < 5) e colado por caractere
+        # invisível — aí o passo (1) não vê (a query virou uma palavra só), o (2b) não é
+        # elegível, e sem o (2a) vaza. Um ramo sem teste é um ramo que alguém apaga.
+        for tok, q in [("3M Co", "receita da 3M​Co em 2025"),
+                       ("BP SA", "o caso BP​SA")]:
+            try:
+                check_no_leak(q, [tok])
+                case(f"C9: token multi-palavra curto {tok!r} colado por invisível", False)
+            except LeakBlocked:
+                case(f"C9: token multi-palavra curto {tok!r} colado por invisível", True)
+
         # ---- REGRESSÃO: omitir a denylist não pode ser o caminho permissivo ----
         spy = SpyClient()
         try:
