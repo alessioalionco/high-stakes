@@ -94,6 +94,40 @@ def main() -> int:
         except LeakBlocked:
             case("REGRESSÃO: bypass por acento é BLOQUEADO", spy.calls == 0)
 
+        # ---- REGRESSÃO QUE EU INTRODUZI: token sem letra ASCII era IGNORADO ----
+        # _fold("Сбербанк") == "" e o teste `if tf and tf in q` pulava o token: o guard
+        # ficou estritamente MAIS FRACO que o `token.lower()` que ele substituiu.
+        for tok, q in [("Сбербанк", "receita do Сбербанк"),
+                       ("北京字节跳动", "dados de 北京字节跳动"),
+                       ("Ακμή", "o caso Ακμή")]:
+            try:
+                check_no_leak(q, [tok]); case(f"REGRESSÃO: token {tok!r} bloqueia", False)
+            except LeakBlocked:
+                case(f"REGRESSÃO: token não-ASCII {tok!r} bloqueia (não é ignorado)", True)
+
+        # letras latinas que o NFKD não decompõe eram APAGADAS -> furavam o match
+        for tok, q, desc in [("Orsted", "receita da Ørsted", "Ø"),
+                             ("Lodz", "escritório em Łodz", "Ł"),
+                             ("Thor", "projeto Þor", "Þ")]:
+            try:
+                check_no_leak(q, [tok]); case(f"REGRESSÃO: disfarce com {desc} bloqueia", False)
+            except LeakBlocked:
+                case(f"REGRESSÃO: disfarce com {desc} bloqueia", True)
+        try:
+            check_no_leak("dados de Aсme Cоrp", ["Acme Corp"])  # с e о cirílicos
+            case("REGRESSÃO: homoglifo cirílico bloqueia", False)
+        except LeakBlocked:
+            case("REGRESSÃO: homoglifo cirílico bloqueia", True)
+
+        # e o custo de usabilidade medido: token curto NÃO pode recusar texto inocente
+        try:
+            check_no_leak("qual o custo de aquisicao", ["oc"])
+            case("REGRESSÃO: token curto não gera recusa falsa (squash só p/ token longo)",
+                 True)
+        except LeakBlocked:
+            case("REGRESSÃO: token curto não gera recusa falsa (squash só p/ token longo)",
+                 False)
+
         # ---- REGRESSÃO: omitir a denylist não pode ser o caminho permissivo ----
         spy = SpyClient()
         try:
@@ -125,6 +159,17 @@ def main() -> int:
                 case(f"REGRESSÃO: reuse que {desc} é RECUSADO", False)
             except ValueError:
                 case(f"REGRESSÃO: reuse que {desc} é RECUSADO", True)
+
+        # REGRESSÃO: conter o diretório não bastava — read_text() segue symlink de ARQUIVO
+        import os as _os
+        (base / "mat" / "link.md").parent.mkdir(parents=True, exist_ok=True)
+        _os.symlink(tmp / "segredo.md", base / "mat" / "roubado.md")
+        try:
+            r = load_reuse({"id": "r", "reuse": "mat"}, base)
+            case("REGRESSÃO: symlink de ARQUIVO apontando pra fora é RECUSADO",
+                 "sk-nao-pode-sair" not in r["answer"])
+        except ValueError:
+            case("REGRESSÃO: symlink de ARQUIVO apontando pra fora é RECUSADO", True)
 
         # ---- misconfiguração falha FECHADA ----
         spy = SpyClient()

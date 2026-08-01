@@ -49,6 +49,18 @@ class LeakBlocked(RuntimeError):
     """Query externa contém token sensível -> recusa rodar (no-leak fechado)."""
 
 
+# Letras latinas que o NFKD NÃO decompõe: sem isto elas caem no `[^0-9a-z]` e são
+# APAGADAS, e apagar uma letra fura o match ("Ørsted" virava "rsted"). São a grafia real
+# de nomes nórdicos, turcos e poloneses — mesma família do "São Paulo" que motivou o fix.
+_TRANSLIT = str.maketrans({
+    "ø": "o", "æ": "ae", "œ": "oe", "ł": "l", "đ": "d", "ð": "d", "þ": "th",
+    "ı": "i", "ħ": "h", "ß": "ss", "ŋ": "n", "ſ": "s",
+    # homoglifos cirílicos/gregos de uso comum em disfarce
+    "а": "a", "е": "e", "о": "o", "с": "c", "р": "p", "х": "x", "у": "y", "к": "k",
+    "α": "a", "ε": "e", "ο": "o", "ρ": "p", "τ": "t", "υ": "u", "κ": "k",
+})
+
+
 def _fold(s: str) -> str:
     """Forma canônica para comparar: o bypass do guard era trivial sem isto.
 
@@ -61,8 +73,19 @@ def _fold(s: str) -> str:
     """
     s = unicodedata.normalize("NFKD", s)
     s = "".join(c for c in s if unicodedata.category(c) not in ("Mn", "Cf"))
-    s = s.casefold()
+    s = s.casefold().translate(_TRANSLIT)
     return re.sub(r"[^0-9a-z]+", " ", s).strip()
+
+
+def _fold_amplo(s: str) -> str:
+    """Fallback para token que não sobrevive ao fold ASCII (cirílico, CJK, grego).
+
+    REGRESSÃO que eu introduzi: `_fold("Сбербанк")` é string vazia, e o teste `if tf and
+    tf in q` PULAVA o token — o guard ficava estritamente mais fraco que o `token.lower()`
+    antigo, que bloqueava. Um guard que ignora em silêncio é pior que um guard ingênuo."""
+    s = unicodedata.normalize("NFKC", s)
+    s = "".join(c for c in s if unicodedata.category(c) not in ("Mn", "Cf"))
+    return re.sub(r"\s+", " ", s.casefold()).strip()
 
 
 def _squash(s: str) -> str:
@@ -76,10 +99,16 @@ def _squash(s: str) -> str:
 
 
 def check_no_leak(query: str, denylist: list[str]) -> None:
-    q, qs = _fold(query), _squash(query)
+    q, qs, qa = _fold(query), _squash(query), _fold_amplo(query)
     for token in denylist:
-        tf, ts = _fold(token), _squash(token)
-        if (tf and tf in q) or (ts and ts in qs):
+        tf, ts, ta = _fold(token), _squash(token), _fold_amplo(token)
+        # `_squash` só entra para token longo: colar a query inteira faz toda fronteira de
+        # palavra virar colisão, e a medição do review deu +10pp de recusa falsa para
+        # token de 4 chars (~0 para >=7). Recusa falsa é segura, mas inutiliza a ferramenta.
+        usa_squash = ts and len(ts) >= 7
+        if ((tf and tf in q)
+                or (usa_squash and ts in qs)
+                or (not tf and ta and ta in qa)):
             raise LeakBlocked(
                 f"query bloqueada: contém token sensível {token!r}. "
                 "Abstraia a query antes de enviar (no-leak)."
@@ -224,7 +253,19 @@ def load_reuse(ask: dict, base_dir: Path, domain_blocklist: list[str] | None = N
         raise ValueError(
             f"reuse {ask['reuse']!r} escapa de {base} — material reusado entra no prompt "
             "pago sem passar pelo no-leak.") from None
-    files = sorted(reuse_dir.glob("*.md")) if reuse_dir.exists() else []
+    # Conter o diretório não basta: `read_text()` segue symlink de ARQUIVO, e um *.md
+    # dentro do base apontando para fora era lido inteiro. O review reproduziu vazando
+    # OPENROUTER_API_KEY exatamente por aqui.
+    files = []
+    if reuse_dir.exists():
+        for f in sorted(reuse_dir.glob("*.md")):
+            try:
+                f.resolve().relative_to(base)
+            except ValueError:
+                raise ValueError(
+                    f"{f} aponta para fora de {base} — material reusado entra no prompt "
+                    "pago sem passar pelo no-leak.") from None
+            files.append(f)
     body = "\n\n".join(f"### {f.name}\n{f.read_text()[:6000]}" for f in files)
     return {
         "id": ask["id"],

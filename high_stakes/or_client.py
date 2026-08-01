@@ -250,10 +250,14 @@ class BudgetLedger:
             if not self._persist:
                 projected = self._reserved + self._spent + est_usd
                 if projected > self.cap_usd:
+                    # `cap` só existe no ramo persistente abaixo. Trocar as duas ocorrências
+                    # de uma vez fez este caminho levantar UnboundLocalError em vez de
+                    # BudgetExceeded — e 247 testes verdes não pegaram, porque nenhum
+                    # exercitava persist=False acima do cap.
                     raise BudgetExceeded(
                         f"reserva ${est_usd:.4f} estouraria o cap "
                         f"(spent ${self._spent:.4f} + reserved ${self._reserved:.4f} "
-                        f"+ est = ${projected:.4f} > ${cap:.2f})"
+                        f"+ est = ${projected:.4f} > ${self.cap_usd:.2f})"
                     )
                 self._reserved += est_usd
                 return
