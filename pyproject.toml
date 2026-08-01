@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "high-stakes"
+version = "1.0.0"
+description = "Motor de rigor para decisões de alto risco: painel adversarial cego, refutação e verificação por código"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Alessio Alionco" }]
+requires-python = ">=3.11"          # tomllib na stdlib
+
+# ZERO dependências, de propósito. O único uso de rede é HTTP, feito com `urllib` da
+# stdlib (high_stakes/http_client.py). Instalar o plugin tem de ser o único passo:
+# uma dependência faltando falharia DEPOIS do brief e do custo aprovado.
+dependencies = []
+
+keywords = ["decision-making", "red-team", "llm", "adversarial", "claude-code"]
+classifiers = [
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Office/Business",
+]
+
+[project.urls]
+Homepage = "https://github.com/alessioalionco/high-stakes"
+
+[tool.setuptools]
+packages = ["high_stakes"]
+
+[tool.setuptools.package-data]
+# Contratos e CSS viajam COM o código: o motor lê os .md em alto do fluxo e o renderer
+# lê o .css. Fora do pacote, os dois somem numa instalação limpa.
+high_stakes = ["core/*.md", "core/sections/*.md", "assets/*.css"]

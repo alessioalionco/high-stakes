@@ -1,0 +1,6 @@
+{
+  "name": "high-stakes",
+  "description": "Motor de rigor para decisões de alto risco e ambíguas: refina o pedido, roda um painel adversarial cego (personas × modelos de famílias diferentes), refuta o consenso e devolve um dossiê com quotes verificadas por código.",
+  "version": "1.0.0",
+  "author": "Alessio Alionco"
+}

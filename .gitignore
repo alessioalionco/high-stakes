@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+.high-stakes.toml
+high-stakes-runs/
+*.egg-info/
+dist/
+build/

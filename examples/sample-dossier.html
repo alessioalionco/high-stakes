@@ -1,0 +1,475 @@
+<!DOCTYPE html><html lang="pt-BR" data-theme="light"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Dossiê da Decisão · high-stakes</title><style>:root{
+    --bg:#fbfbfd; --surface:#ffffff; --surface-2:#f2f3f8; --border:#e3e6ee;
+    --text:#1a1d29; --muted:#555c70; --faint:#8b91a6;
+    --brand:#2547f5; --brand-ink:#1b2a8a; --accent:#0d9488;
+    --bull:#0f7b4d; --bull-bg:#eaf6f0; --bear:#b3261e; --bear-bg:#fdf0ee;
+    --gold:#8a6d00; --gold-bg:#fff6dd; --warn:#c2410c; --warn-bg:#fff3ea;
+  }
+  html[data-theme="dark"]{
+    --bg:#0e1118; --surface:#151923; --surface-2:#1c2130; --border:#293049;
+    --text:#eef1f8; --muted:#a8b0c5; --faint:#7f879c;
+    --brand:#6483ff; --brand-ink:#aebcff; --accent:#2fd6c4;
+    --bull:#3ecf8e; --bull-bg:#0e2b1e; --bear:#ff8078; --bear-bg:#331512;
+    --gold:#ffd34d; --gold-bg:#332b08; --warn:#fb923c; --warn-bg:#2a1b10;
+  }
+  *{box-sizing:border-box} html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,Helvetica,Arial,sans-serif;line-height:1.62;font-size:15.5px;-webkit-font-smoothing:antialiased}
+  a{color:var(--brand);text-decoration:none} a:hover{text-decoration:underline}
+  .wrap{max-width:880px;margin:0 auto;padding:0 26px}
+  header.top{position:sticky;top:0;z-index:50;backdrop-filter:saturate(1.4) blur(10px);background:color-mix(in srgb,var(--surface) 88%,transparent);border-bottom:1px solid var(--border)}
+  .top .in{max-width:1080px;margin:0 auto;padding:0 20px;display:flex;align-items:center;gap:12px;height:52px}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:13.5px;white-space:nowrap}
+  .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--brand)}
+  .top nav{margin-left:auto;display:flex;gap:1px;flex-wrap:wrap}
+  .top nav a{color:var(--muted);font-size:12.5px;font-weight:600;padding:6px 9px;border-radius:8px}
+  .top nav a:hover{background:var(--surface-2);color:var(--text);text-decoration:none}
+  .iconbtn{border:1px solid var(--border);background:var(--surface);color:var(--muted);border-radius:8px;padding:5px 10px;font-size:12.5px;cursor:pointer}
+  .watermark{font-size:10px;font-weight:800;letter-spacing:.1em;color:var(--warn);background:var(--warn-bg);padding:3px 8px;border-radius:999px}
+  .titleblock{padding:44px 0 8px}
+  .kicker{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--brand)}
+  h1{font-size:clamp(26px,3.6vw,36px);line-height:1.12;letter-spacing:-.8px;margin:10px 0 8px;font-weight:800}
+  .sub{font-size:16px;color:var(--muted);margin:0}
+  .meta{margin:14px 0 0;display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--faint);border-bottom:1px solid var(--border);padding-bottom:18px}
+  .meta b{color:var(--muted)}
+  h2{font-size:22px;letter-spacing:-.5px;margin:0 0 4px;font-weight:800}
+  h3{font-size:17px;letter-spacing:-.3px;margin:26px 0 6px;font-weight:750}
+  h4{font-size:15px;margin:18px 0 4px}
+  section{padding:26px 0 10px}
+  section+section{border-top:1px solid var(--border);margin-top:16px}
+  .secnum{color:var(--brand);font-weight:800;margin-right:8px}
+  .idtag{display:inline-block;font-size:11.5px;font-weight:800;color:var(--brand);background:color-mix(in srgb,var(--brand) 10%,var(--surface));border:1px solid color-mix(in srgb,var(--brand) 30%,var(--border));border-radius:6px;padding:1px 8px;margin-right:8px;vertical-align:2px;white-space:nowrap}
+  .lead{color:var(--muted);font-size:13.5px;margin:0 0 8px}
+  p{margin:9px 0}
+  .anchor{scroll-margin-top:66px}
+  .exec{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:6px 22px 10px;margin-top:14px}
+  .exec p{font-size:15px}
+  .reco{border-left:4px solid var(--brand);background:var(--surface-2);border-radius:0 10px 10px 0;padding:12px 16px;margin:14px 0;font-size:15px}
+  .caveat{display:block;font-size:12.5px;font-weight:600;color:var(--warn);background:var(--warn-bg);border-radius:9px;padding:8px 12px;margin:12px 0}
+  table{width:100%;border-collapse:collapse;margin:14px 0;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;font-size:13px}
+  th{background:var(--surface-2);text-align:left;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:8px 10px}
+  td{padding:9px 10px;border-top:1px solid var(--border);vertical-align:top}
+  td.center,th.center{text-align:center}
+  .chip{display:inline-block;font-size:10.5px;font-weight:700;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;padding:1px 6px;color:var(--muted);white-space:nowrap}
+  .check{color:var(--accent);font-weight:800} .nocheck{color:var(--faint)}
+  .pesobar{font-weight:800;color:var(--brand)}
+  .quote{font-size:14px;font-style:italic;color:var(--text);background:var(--surface-2);border-left:3px solid var(--brand);padding:9px 13px;border-radius:0 8px 8px 0;margin:10px 0}
+  .quote .who{display:block;font-style:normal;font-size:11px;font-weight:700;color:var(--faint);margin-top:5px}
+  .quote.big{font-size:15.5px;border-left-color:var(--accent)}
+  .badge{font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:2px 7px;border-radius:5px;white-space:nowrap;vertical-align:middle}
+  .b-flaw{color:#fff;background:var(--bear)} .b-risk{color:var(--warn);background:var(--warn-bg)}
+  .b-assum{color:var(--brand-ink);background:color-mix(in srgb,var(--brand) 14%,var(--surface))}
+  .b-oq{color:var(--gold);background:var(--gold-bg)} .b-dc{color:#fff;background:var(--gold)}
+  .b-acatado{color:var(--bull);background:var(--bull-bg)}
+  .fork{border:1px solid var(--border);border-radius:12px;overflow:hidden;margin:16px 0;background:var(--surface)}
+  .fork .hd{padding:13px 18px;border-bottom:1px solid var(--border)}
+  .fork .hd h3{margin:0;font-size:16.5px}
+  .fork .body{padding:4px 18px 8px}
+  .side{margin:12px 0;padding:10px 14px;border-radius:9px}
+  .side.bull{background:var(--bull-bg);border-left:4px solid var(--bull)}
+  .side.bear{background:var(--bear-bg);border-left:4px solid var(--bear)}
+  .side h5{margin:0 0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+  .side.bull h5{color:var(--bull)} .side.bear h5{color:var(--bear)}
+  .side .camp{font-size:11px;color:var(--faint);font-weight:700}
+  .side p{font-size:14px;margin:7px 0}
+  .fork .foot{padding:10px 18px;border-top:1px solid var(--border);font-size:13.5px;background:var(--surface-2)}
+  .advisor{border-top:3px solid var(--brand);background:var(--surface);border-left:1px solid var(--border);border-right:1px solid var(--border);border-bottom:1px solid var(--border);border-radius:0 0 12px 12px;padding:16px 22px 12px;margin:22px 0}
+  .advisor .role{font-size:12px;color:var(--faint);font-weight:600;margin:-2px 0 2px}
+  .advisor h3{margin:0}
+  .advisor .thesis{font-size:16.5px;font-weight:750;letter-spacing:-.3px;margin:10px 0 2px}
+  .qa{display:grid;grid-template-columns:1fr 1fr;gap:0 22px;margin:12px 0 4px}
+  .qa h6{margin:8px 0 4px;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+  .qa ul{margin:0;padding-left:18px;font-size:13px}
+  .qa li{margin:3px 0}
+  .scorestrip{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0 8px}
+  .scorestrip .sc{background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:8px 11px;font-size:12.5px}
+  .scorestrip .sc b{display:block;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
+  .no{color:var(--bear);font-weight:800} .yes{color:var(--bull);font-weight:800} .cond{color:var(--gold);font-weight:800}
+  ol.fifteen{counter-reset:rec;list-style:none;padding:0;margin:14px 0}
+  ol.fifteen li{position:relative;padding:11px 15px 11px 56px;border:1px solid var(--border);border-radius:10px;background:var(--surface);margin:9px 0;font-size:13.8px;counter-increment:rec}
+  ol.fifteen li:before{content:attr(data-n);position:absolute;left:13px;top:11px;min-width:32px;height:24px;border-radius:7px;background:var(--brand);color:#fff;font-weight:800;font-size:11.5px;display:flex;align-items:center;justify-content:center;padding:0 4px}
+  ol.fifteen li b{display:block;margin-bottom:3px;font-size:14.2px}
+  ol.fifteen li .src{display:block;font-size:11.5px;color:var(--faint);margin-top:5px}
+  .grp{font-size:11.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:18px 0 2px}
+  details{border:1px solid var(--border);border-radius:10px;margin:10px 0;background:var(--surface)}
+  summary{cursor:pointer;padding:10px 14px;font-weight:700;font-size:13.5px;color:var(--brand)}
+  details[open] summary{border-bottom:1px solid var(--border)}
+  details .inner{padding:10px 14px;font-size:13.5px;color:var(--muted)}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin:10px 0;font-size:12px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .swatch{width:20px;height:11px;border-radius:3px;border:1px solid var(--faint);background:var(--surface)}
+  .swatch.solid{background:var(--brand);border-color:var(--brand)} .swatch.dash{border-style:dashed}
+  footer{padding:28px 0 46px;border-top:1px solid var(--border);font-size:12px;color:var(--faint);margin-top:26px}
+  @media print{
+    header.top{display:none} body{background:#fff;font-size:11pt}
+    .wrap{max-width:100%} section{page-break-inside:avoid} .advisor{page-break-inside:avoid}
+    .fork{page-break-inside:avoid} details{display:none} a{color:inherit}
+  }
+
+
+.verdict-line{font-weight:700;border-left:3px solid var(--brand);padding-left:10px}
+.thesis{font-size:1.05em}
+blockquote.quote{border-left:3px solid var(--accent);background:var(--surface-2);margin:10px 0;padding:10px 14px;border-radius:6px}
+blockquote.quote .who{display:block;margin-top:6px;color:var(--muted);font-size:.85em;font-style:normal}
+p.side{padding:10px 14px;border-radius:8px;margin:10px 0}
+p.side.bull{background:var(--bull-bg);border-left:3px solid var(--bull)}
+p.side.bear{background:var(--bear-bg);border-left:3px solid var(--bear)}
+h2{margin-top:2.4em}
+table{font-size:.88em}
+</style></head><body><nav><a href="#s0">Resumo</a><a href="#s0b">Escopo</a><a href="#s1">1 Convergentes</a><a href="#s2">2 Forks</a><a href="#s3">3 Únicas</a><a href="#s4">4 Conselho</a><a href="#s5">5 Agenda</a><a href="#s6">6 Síntese</a><a href="#s7">7 Apêndice</a></nav><main class="wrap" style="max-width:880px;margin:0 auto;padding:22px 20px 90px"><header><p class="lead">Dossiê da Decisão</p><h1>migrar de preço por assento para híbrido no ciclo de renovação?</h1></header>
+<blockquote class="quote">
+<b>Exemplo sintético.</b> Empresa, números, conselheiros e citações são inventados para 
+demonstrar o formato. Os conselheiros são <b>arquétipos fictícios</b> de propósito: um 
+exemplo público não deve fabricar citações atribuídas a pessoas reais. 
+</blockquote>
+<h2 id="s0b"><span class="secnum">Escopo</span></h2>
+<p><b>Decisão:</b> a Meridian (gestão de contratos jurídicos, US$ 12M de receita recorrente,</p>
+<p>240 clientes, retenção líquida de 108%) deve substituir o preço por assento por um modelo</p>
+<p>híbrido — plataforma fixa mais consumo por documento processado por IA — já no ciclo de</p>
+<p>renovação que começa em 90 dias?</p>
+<p><b>Não está em escopo:</b> o valor da tabela nova, a estratégia de canal, e a decisão de</p>
+<p>construir versus comprar o motor de extração. O painel foi instruído a tratar esses três</p>
+<p>como dados.</p>
+<p><b>Reversibilidade:</b> baixa dentro do ciclo. Contratos anuais assinados no modelo novo</p>
+<p>prendem a empresa por 12 meses; voltar atrás no meio custa credibilidade com quem já</p>
+<p>migrou.</p>
+<p><b>Sobre os conselheiros:</b> são <b>lentes simuladas por modelos de linguagem</b>. Não são as</p>
+<p>pessoas reais, e nenhuma frase atribuída a eles neste dossiê foi dita por eles. O que a</p>
+<p>verificação de quotes garante é fidelidade ao que o modelo escreveu naquela lente — nada</p>
+<p>além disso.</p>
+<p><b>Board:</b> 4 lentes de cobertura mais uma anti-tese, cada uma rodada contra 3 modelos de</p>
+<p>famílias distintas, sem que nenhuma célula visse as outras.</p>
+<h2 id="s0"><span class="secnum">§0 Resumo executivo</span></h2>
+<p><b>A recomendação é migrar, mas não em 90 dias, e não para todos.</b> O painel convergiu</p>
+<p>com força incomum em um ponto: o modelo por assento já está desalinhado da entrega de</p>
+<p>valor, e esse desalinhamento piora a cada mês em que a IA processa mais documentos por</p>
+<p>usuário. O que o painel não sustenta é o cronograma. Três das quatro lentes trataram o</p>
+<p>prazo de 90 dias como o verdadeiro risco da decisão — não a mudança em si.</p>
+<p><b>O custo de errar é assimétrico, e a assimetria aponta contra a pressa.</b> Migrar</p>
+<p>devagar custa alguns trimestres de margem que ficaria melhor. Migrar rápido e errado</p>
+<p>custa renovações num ciclo em que 40% da base está em janela de renovação simultânea. O</p>
+<p>painel foi unânime em que essas duas perdas não são da mesma ordem de grandeza, e que</p>
+<p>tratá-las como equivalentes é o erro de enquadramento mais provável aqui.</p>
+<p><b>O ponto de maior divergência não é se, mas quem paga a conta da transição.</b> As lentes</p>
+<p>se dividiram limpo entre proteger a margem no curto prazo e proteger a previsibilidade do</p>
+<p>orçamento do comprador. Essa divergência é real e não se resolve por argumento — resolve</p>
+<p>por um dado que a Meridian tem e não olhou: a dispersão de documentos processados por</p>
+<p>cliente dentro de cada faixa de contrato. Se a dispersão for alta, o híbrido é urgente. Se</p>
+<p>for baixa, ele é cosmético e o esforço deveria ir para outro lugar.</p>
+<p><b>Um risco apareceu numa lente só e sobreviveu à refutação.</b> O comprador de software</p>
+<p>jurídico é avesso a variabilidade orçamentária de um jeito que não se explica por</p>
+<p>economia — se explica por como o orçamento dele é aprovado internamente. Um modelo de</p>
+<p>consumo pode ser racionalmente melhor para o cliente e ainda assim ser rejeitado, porque</p>
+<p>quem assina não é quem usa. Nenhuma outra lente levantou isso, e a refutação não conseguiu</p>
+<p>derrubá-lo.</p>
+<p><b>O que muda a recomendação:</b> um piso de consumo alto o bastante para que a fatura de</p>
+<p>90% dos clientes fique dentro de uma faixa previsível transforma o híbrido de aposta em</p>
+<p>não-evento comercial. Sem esse piso, a decisão vira um teste de tolerância a variância</p>
+<p>num segmento que historicamente não tem nenhuma. Este é o item que o painel colocaria na</p>
+<p>frente de tudo.</p>
+<p><b>Como ler este dossiê:</b> §1 traz onde as lentes concordaram e por quê o mecanismo do dano</p>
+<p>é o mesmo; §2 traz as duas divergências, com os dois lados defendidos na voz de quem os</p>
+<p>defendeu; §3 traz o que apareceu numa lente só; §4 traz cada conselheiro por inteiro.</p>
+<p>Convergência aqui <b>não é prova</b> — modelos parecidos erram junto, e três lentes</p>
+<p>concordando pode ser um único erro repetido três vezes.</p>
+<h2 id="s1"><span class="secnum">§1 Convergentes</span></h2>
+<h3 id="i1.1"><span class="idtag">1.1</span>  O preço por assento já está desalinhado da entrega de valor</h3>
+<p>As quatro lentes chegaram ao mesmo diagnóstico por caminhos diferentes, o que é o tipo de</p>
+<p>convergência que vale mais: não é a mesma cadeia de raciocínio repetida, são cadeias</p>
+<p>independentes terminando no mesmo lugar. O mecanismo do dano é direto — o custo de servir</p>
+<p>cresce com documentos processados, a receita cresce com cadeiras ocupadas, e as duas curvas</p>
+<p>descolaram quando a extração automática passou a substituir trabalho humano em vez de</p>
+<p>apoiá-lo.</p>
+<blockquote class="quote">
+&quot;Você está cobrando pela cadeira num produto que o cliente comprou justamente para 
+precisar de menos gente na cadeira. Isso não é um problema de precificação, é uma 
+contradição no modelo.&quot;<span class="who">A Operadora de Margem (lente simulada · GPT-5.6 Sol)</span>
+</blockquote>
+<p>O que dá peso a este item é que ele é verificável hoje, sem pesquisa nova. A Meridian tem</p>
+<p>a telemetria de documentos processados e a base de contratos; cruzar as duas responde se o</p>
+<p>descolamento é teórico ou já está na margem. Duas lentes apontaram que essa checagem</p>
+<p>deveria preceder qualquer decisão, e que ela custa dias, não trimestres.</p>
+<h3 id="i1.2"><span class="idtag">1.2</span>  O prazo de 90 dias é o risco dominante, não a mudança</h3>
+<p>Três lentes trataram o cronograma como o verdadeiro objeto da decisão. O argumento comum:</p>
+<p>uma mudança de modelo de preço não falha por estar errada, falha por ser comunicada mal, e</p>
+<p>90 dias não dão tempo para descobrir que a comunicação está ruim antes de ela alcançar a</p>
+<p>base inteira.</p>
+<blockquote class="quote">
+&quot;Mudança de preço não morre no spreadsheet. Morre na primeira ligação em que o cliente 
+pergunta &#x27;quanto eu vou pagar em março?&#x27; e o vendedor não sabe responder.&quot;<span class="who">O Advogado do Cliente (lente simulada · Grok-4.5)</span>
+</blockquote>
+<p>A concentração de renovações agrava o problema de um jeito específico: com 40% da base</p>
+<p>renovando na mesma janela, não há grupo de controle natural. A empresa descobre que errou</p>
+<p>depois de já ter errado com quase metade da receita, e sem um contrafactual para saber o</p>
+<p>tamanho do erro. Uma lente chamou isso de &quot;testar o paraquedas depois de pular&quot;.</p>
+<h3 id="i1.3"><span class="idtag">1.3</span>  Sem piso de consumo, o modelo transfere variância para quem menos a tolera</h3>
+<p>O consenso aqui foi menos sobre economia e mais sobre comportamento do comprador. Um</p>
+<p>modelo puro de consumo é mais justo em média e pior na cauda — e o comprador jurídico</p>
+<p>compra para não ter cauda.</p>
+<blockquote class="quote">
+&quot;Justo na média e imprevisível na ponta é exatamente o produto que este comprador não 
+quer. Ele paga prêmio por previsibilidade; você está propondo devolver o prêmio e ficar 
+com a variância.&quot;<span class="who">A Estrategista de Categoria (lente simulada · GLM-5.2)</span>
+</blockquote>
+<p>O piso resolve a maior parte disso sem desfazer o alinhamento de valor, e foi a única</p>
+<p>mitigação que apareceu em mais de uma lente de forma independente. O desenho concreto —</p>
+<p>onde colocar o piso, e se ele é por cliente ou por faixa — ficou em aberto, e é o tipo de</p>
+<p>detalhe que decide se a mudança é não-evento ou crise.</p>
+<h2 id="s2"><span class="secnum">§2 Divergentes</span></h2>
+<h3 id="i2.1"><span class="idtag">2.1</span>  Proteger margem agora ou previsibilidade do comprador</h3>
+<p>Esta é a divergência de fundo do dossiê, e ela não se dissolve com mais análise: as duas</p>
+<p>posições partem de premissas diferentes sobre o que está mais escasso na Meridian hoje.</p>
+<p class="side bull">🐂 <b>Ensaio a favor de mover agora, priorizando margem.</b> Cada trimestre no modelo antigo</p>
+<p>é margem que não volta, e o descolamento entre custo e receita acelera. A base atual foi</p>
+<p>vendida com uma promessa de eficiência que está sendo cumprida — clientes estão usando</p>
+<p>mais e pagando o mesmo. Adiar não é neutro: é escolher subsidiar o uso crescente com</p>
+<p>margem própria, e fazer isso por mais tempo em nome de um conforto que o cliente nem pediu.</p>
+<blockquote class="quote">
+&quot;Cada trimestre que você adia é margem que você entrega de graça para um cliente que já 
+está feliz. Conforto do comprador é uma escolha que alguém está pagando — no caso, você.&quot; 
+<span class="who">A Operadora de Margem (lente simulada · Kimi K3)</span>
+</blockquote>
+<p class="side bear">🐻 <b>Ensaio a favor de segurar, priorizando previsibilidade.</b> A retenção líquida de 108%</p>
+<p>é o ativo mais frágil e mais valioso da empresa, e ela repousa em confiança acumulada.</p>
+<p>Preço é o único ponto do relacionamento em que o cliente sente que perdeu controle. Mexer</p>
+<p>nele numa janela de renovação concentrada, sem ter testado a comunicação, arrisca o ativo</p>
+<p>inteiro para ganhar pontos de margem que a empresa pode capturar depois, com menos risco.</p>
+<blockquote class="quote">
+&quot;Margem você recupera no trimestre seguinte. Confiança de comprador jurídico você 
+recupera em anos, se recuperar. Não são grandezas trocáveis.&quot;<span class="who">O Advogado do Cliente (lente simulada · GPT-5.6 Sol)</span>
+</blockquote>
+<p><b>Por que divergem:</b> não é desacordo sobre os fatos — as duas lentes leram os mesmos</p>
+<p>números. É desacordo sobre qual recurso é o gargalo. Uma vê caixa e margem como restrição</p>
+<p>ativa; a outra vê confiança do cliente. Quem estiver certo sobre o gargalo está certo sobre</p>
+<p>a decisão.</p>
+<p><b>Custo de errar por lado:</b> errar para o lado da margem custa renovações num ciclo</p>
+<p>concentrado, com efeito composto sobre a retenção líquida e sobre a próxima captação.</p>
+<p>Errar para o lado da previsibilidade custa dois a três trimestres de margem inferior e o</p>
+<p>risco de a janela competitiva fechar. O primeiro erro é mais difícil de desfazer.</p>
+<p><b>O que resolve:</b> a dispersão de documentos processados por cliente dentro de cada faixa</p>
+<p>de contrato. Alta dispersão significa que o modelo atual já está cobrando errado de gente</p>
+<p>demais, e a urgência é real. Baixa dispersão significa que o híbrido reorganiza pouco e a</p>
+<p>pressa não se justifica. O dado existe e não foi consultado.</p>
+<h3 id="i2.2"><span class="idtag">2.2</span>  Migrar a base inteira ou só o segmento de alto consumo — fork condicional</h3>
+<p>Esta divergência é condicional: ela só existe se a resposta ao item 2.1 for &quot;mover&quot;. Se a</p>
+<p>decisão for segurar, o recorte de segmento não se coloca. Por isso não há dois ensaios</p>
+<p>defendidos aqui — há uma pré-condição e um gatilho.</p>
+<p><b>Pré-condição:</b> decisão de migrar tomada, com piso de consumo definido.</p>
+<p><b>Gatilho:</b> se a dispersão medida em 2.1 se concentrar no quartil superior de uso, o</p>
+<p>recorte por segmento passa a dominar — migra-se quem já está fora da faixa, e o resto</p>
+<p>permanece no modelo antigo até a renovação natural. Se a dispersão for uniforme, o recorte</p>
+<p>por segmento cria dois modelos de preço convivendo sem ganho proporcional, e a migração</p>
+<p>ampla fica melhor.</p>
+<blockquote class="quote">
+&quot;Dois modelos de preço convivendo é uma dívida operacional que ninguém coloca no 
+spreadsheet e todo mundo paga no suporte.&quot;<span class="who">A Estrategista de Categoria (lente simulada · Grok-4.5)</span>
+</blockquote>
+<h2 id="s3"><span class="secnum">§3 Únicas</span></h2>
+<h3 id="i3.1"><span class="idtag">3.1</span>  Quem aprova o orçamento não é quem usa o produto</h3>
+<p>Apareceu numa lente só, e sobreviveu à refutação — o refutador tentou reduzi-la a</p>
+<p>aversão genérica a risco e não conseguiu, porque o mecanismo proposto é estrutural, não</p>
+<p>psicológico. No comprador jurídico corporativo, o orçamento costuma ser aprovado uma vez</p>
+<p>ao ano por alguém que não usa o produto e cuja métrica de sucesso é não estourar a</p>
+<p>previsão. Para essa pessoa, uma fatura variável não é um preço melhor — é um risco de</p>
+<p>carreira.</p>
+<p><b>Por que importa:</b> porque inverte o sinal da análise econômica. Um modelo que é</p>
+<p>racionalmente mais barato para a empresa cliente pode ser rejeitado pelo aprovador, e a</p>
+<p>rejeição não aparece em nenhuma modelagem de valor. Se este mecanismo for real, o piso de</p>
+<p>consumo deixa de ser uma mitigação e vira o produto: o que se vende é a previsibilidade,</p>
+<p>com o consumo por trás dela.</p>
+<p><b>Testabilidade:</b> alta e barata. Cinco conversas com aprovadores de orçamento — não com</p>
+<p>usuários — perguntando como uma fatura variável entraria no processo de aprovação deles.</p>
+<p>Se três ou mais descreverem fricção estrutural, o mecanismo está confirmado e o desenho</p>
+<p>muda. Custa uma semana.</p>
+<h3 id="i3.2"><span class="idtag">3.2</span>  O motor de extração pode virar refém do preço</h3>
+<p>Uma lente notou que amarrar receita a documentos processados cria um incentivo interno</p>
+<p>perverso: a equipe de produto passa a ter razão para não melhorar a eficiência da extração,</p>
+<p>porque eficiência maior significa menos documentos faturáveis para o mesmo trabalho do</p>
+<p>cliente.</p>
+<p><b>Por que importa:</b> é um risco de médio prazo que não aparece no primeiro ano e é caro de</p>
+<p>desfazer depois, porque exige remexer no preço de novo. Empresas que caíram nisso</p>
+<p>descobriram tarde que o modelo de receita estava brigando com o roadmap.</p>
+<p><b>Testabilidade:</b> média. Não dá para observar antes de acontecer, mas dá para desenhar</p>
+<p>contra: definir a unidade faturável em termos de valor entregue ao cliente (contrato</p>
+<p>analisado) em vez de trabalho consumido (páginas processadas) desarma o incentivo na</p>
+<p>origem. A escolha da unidade é reversível hoje e cara depois.</p>
+<h2 id="s4"><span class="secnum">§4 Pareceres</span></h2>
+<h3 id="i4.1"><span class="idtag">4.1</span>  A Operadora de Margem</h3>
+<p class="thesis"><i>&quot;Conforto do comprador é uma escolha, e alguém está pagando por ela.&quot;</i></p>
+<p>A leitura desta lente é que a Meridian está subsidiando uso crescente com margem própria e</p>
+<p>chamando isso de retenção. A retenção líquida de 108% parece saudável até se perguntar</p>
+<p>quanto dela vem de expansão de assentos versus quanto vem de clientes usando muito mais</p>
+<p>pelo mesmo preço. Se for majoritariamente o segundo, o número está medindo tolerância, não</p>
+<p>valor capturado, e vai piorar sozinho conforme o produto melhora.</p>
+<p>O parecer não trata o prazo de 90 dias como problema sério, e é aqui que ele diverge do</p>
+<p>resto do painel. O argumento é que o custo de comunicação é fixo e não diminui com tempo —</p>
+<p>adiar só adia o desconforto, enquanto a margem perdida é permanente.</p>
+<p><b>Perguntas:</b> Quanto da retenção líquida vem de expansão de assentos? · Qual a margem</p>
+<p>bruta por cliente no decil superior de uso? · Em quantos meses o custo de inferência</p>
+<p>ultrapassa a receita incremental no ritmo atual? · A tabela nova foi testada contra a base</p>
+<p>instalada ou só contra clientes novos?</p>
+<p><b>Sugestões:</b> Medir a dispersão de uso antes de qualquer coisa · Definir o piso de</p>
+<p>consumo pelo percentil 90 da base, não pela média · Separar o preço de plataforma do preço</p>
+<p>de consumo na comunicação, mesmo que a fatura seja única.</p>
+<p><b>Strip:</b> margem 4/5 · urgência 4/5 · risco de execução 2/5.</p>
+<p class="verdict-line"><b>Em uma frase:</b> o modelo atual está errado e piora sozinho, então o único argumento</p>
+<p>honesto para adiar é o risco de execução — que esta lente considera superestimado.</p>
+<h3 id="i4.2"><span class="idtag">4.2</span>  O Advogado do Cliente</h3>
+<p class="thesis"><i>&quot;Margem volta no trimestre seguinte; confiança volta em anos, se voltar.&quot;</i></p>
+<p>Esta lente concorda que o modelo precisa mudar e discorda frontalmente do cronograma. O</p>
+<p>raciocínio central é sobre concentração de risco: com 40% da base renovando na mesma</p>
+<p>janela, a Meridian perde a capacidade de aprender com os primeiros erros antes que eles</p>
+<p>alcancem a maior parte da receita. Não é uma objeção à mudança, é uma objeção a fazê-la</p>
+<p>sem grupo de controle.</p>
+<p>A recomendação concreta é escalonar por janela de renovação em vez de por segmento —</p>
+<p>começar pelos contratos que vencem mais tarde, aprender com eles, e chegar na janela</p>
+<p>concentrada com a comunicação já testada. Custa dois trimestres e compra a informação que</p>
+<p>o cronograma atual não permite ter.</p>
+<p><b>Perguntas:</b> Quantos clientes veriam a fatura subir mais de 20% no modelo novo? · O time</p>
+<p>comercial consegue responder &quot;quanto vou pagar em março&quot; hoje? · Existe cláusula de teto</p>
+<p>nos contratos atuais que impeça a migração? · Quem, na base, é referência para os outros?</p>
+<p><b>Sugestões:</b> Escalonar por janela de renovação, não por segmento · Oferecer teto de</p>
+<p>fatura no primeiro ano para quem migrar cedo · Treinar o time comercial na conversa de</p>
+<p>variância antes de anunciar, não depois.</p>
+<p><b>Strip:</b> risco de churn 4/5 · urgência 2/5 · risco de execução 4/5.</p>
+<p class="verdict-line"><b>Em uma frase:</b> a mudança está certa e o calendário está errado, e o calendário é o que</p>
+<p>vai determinar o resultado.</p>
+<h3 id="i4.3"><span class="idtag">4.3</span>  A Estrategista de Categoria</h3>
+<p class="thesis"><i>&quot;O mercado vai ler essa mudança como sinal, não como tabela.&quot;</i></p>
+<p>O foco desta lente é em como a mudança é interpretada por quem não é cliente: concorrentes,</p>
+<p>analistas e prospects. Migrar para consumo num momento em que a categoria inteira discute</p>
+<p>precificação de IA posiciona a Meridian como quem cobra pelo que entrega — o que é</p>
+<p>favorável. Mas fazê-lo às pressas e depois recuar posiciona como quem não sabe o que</p>
+<p>está vendendo, o que é pior do que não ter mexido.</p>
+<p>A lente também levanta a dívida operacional de manter dois modelos convivendo, que</p>
+<p>costuma ser subestimada porque não aparece em nenhuma planilha e se manifesta no suporte,</p>
+<p>no faturamento e na previsão de receita.</p>
+<p><b>Perguntas:</b> Como os dois concorrentes mais próximos precificam IA hoje? · A mudança</p>
+<p>seria anunciada publicamente ou só na renovação? · Existe risco de um concorrente usar a</p>
+<p>variância como argumento de venda? · Quanto tempo a empresa aguenta operar dois modelos?</p>
+<p><b>Sugestões:</b> Anunciar a mudança como previsibilidade com consumo por trás, não como</p>
+<p>consumo com piso · Fechar a data de fim da convivência dos dois modelos antes de começar ·</p>
+<p>Preparar a resposta ao argumento de &quot;fatura imprevisível&quot; antes que o concorrente o use.</p>
+<p><b>Strip:</b> posicionamento 4/5 · urgência 3/5 · risco de execução 3/5.</p>
+<p class="verdict-line"><b>Em uma frase:</b> a direção fortalece a posição da empresa na categoria, desde que a</p>
+<p>execução não transforme a mudança em sinal de hesitação.</p>
+<h3 id="i4.4"><span class="idtag">4.4</span>  O Cético Financeiro — anti-tese</h3>
+<p class="thesis"><i>&quot;Ninguém perguntou se a mudança de preço resolve o problema que a empresa realmente tem.&quot;</i></p>
+<p>A anti-tese não defende o modelo atual. Ela questiona o enquadramento: o painel inteiro</p>
+<p>aceitou que o problema é o alinhamento entre preço e valor, quando a evidência apresentada</p>
+<p>também é compatível com um problema de custo unitário de inferência que a precificação não</p>
+<p>resolve, apenas repassa. Se o custo de servir estiver crescendo mais rápido que qualquer</p>
+<p>tabela consegue acompanhar, migrar para consumo compra tempo e adia a conversa difícil.</p>
+<p>O segundo ponto é sobre a retenção líquida de 108%: o painel tratou o número como ativo a</p>
+<p>proteger. A anti-tese observa que 108% num produto de IA com adoção crescente é um número</p>
+<p>fraco, não forte — e que se ele estiver sendo sustentado por clientes que usam muito e</p>
+<p>pagam pouco, a migração vai revelar isso de uma vez, e não como sucesso.</p>
+<p class="verdict-line"><b>Em uma frase:</b> a decisão de preço pode estar sendo usada para não tomar a decisão de</p>
+<p>custo, e o dossiê inteiro seria diferente se o custo unitário de inferência estivesse na</p>
+<p>mesa.</p>
+<h2 id="s5"><span class="secnum">§5 Notas por lente</span></h2>
+<p>As notas abaixo são <b>sinal fraco</b> e vão rotuladas como tal. O que importa nelas é o</p>
+<p>espalhamento, não o nível: lentes diferentes tendem a pontuar de forma parecida mesmo</p>
+<p>quando discordam no conteúdo, então um número alto não significa concordância. Onde o</p>
+<p>espalhamento é grande, há divergência real por trás — e essa divergência já está descrita</p>
+<p>em §2, que é onde ela deve ser lida.</p>
+<table><thead><tr><th>Lente</th><th>Direção</th><th>Urgência</th><th>Risco de execução</th></tr></thead><tbody>
+<tr><td>A Operadora de Margem</td><td>migrar</td><td>4/5</td><td>2/5</td></tr>
+<tr><td>O Advogado do Cliente</td><td>migrar</td><td>2/5</td><td>4/5</td></tr>
+<tr><td>A Estrategista de Categoria</td><td>migrar</td><td>3/5</td><td>3/5</td></tr>
+<tr><td>O Cético Financeiro</td><td>reenquadrar</td><td>—</td><td>—</td></tr>
+</tbody></table>
+<p>O espalhamento em urgência (2 a 4) e em risco de execução (2 a 4) é o mapa da divergência</p>
+<p>de <a class="anchor" href="#i2.1">§2.1</a>, e é o único conteúdo desta tabela que merece peso.</p>
+<h2 id="s6"><span class="secnum">§6 Recomendação</span></h2>
+<h3 id="i6.1"><span class="idtag">6.1</span>  A recomendação</h3>
+<p>Migrar, com piso de consumo, escalonado por janela de renovação, e não em 90 dias. A</p>
+<p>direção é sustentada por convergência independente das quatro lentes; o cronograma não é</p>
+<p>sustentado por nenhuma delas exceto uma.</p>
+<h3 id="i6.2"><span class="idtag">6.2</span>  O que precisa ser verdade</h3>
+<p>A recomendação depende de a dispersão de uso ser alta. Se a medição mostrar dispersão</p>
+<p>baixa, a urgência desaparece e o esforço deveria ir para o custo unitário — que é o ponto</p>
+<p>da anti-tese.</p>
+<h3 id="i6.3"><span class="idtag">6.3</span>  O que observar</h3>
+<p>A primeira coorte escalonada é o instrumento: se a conversa de variância travar nas</p>
+<p>primeiras dez renovações, o problema é a comunicação e ele é corrigível. Se travar na</p>
+<p>aprovação de orçamento do cliente, o problema é estrutural e o desenho precisa mudar.</p>
+<h3 id="i6.4"><span class="idtag">6.4</span>  Sugestões ranqueadas</h3>
+<p>**1. Medir a dispersão de documentos processados por cliente, dentro de cada faixa de</p>
+<p>contrato, antes de qualquer decisão.** É o dado que resolve a divergência central do</p>
+<p>dossiê e a empresa já o tem — está na telemetria de produto cruzada com a base de</p>
+<p>contratos. O mecanismo: se o uso for muito disperso dentro de uma mesma faixa de preço, o</p>
+<p>modelo atual já está cobrando errado de muita gente, e a urgência da migração é real e</p>
+<p>mensurável. Se for uniforme, o híbrido reorganiza pouco e a pressa não se justifica. Dono:</p>
+<p>produto e finanças em conjunto. Gate: nenhuma decisão de cronograma antes deste número</p>
+<p>existir. Custa dias, não trimestres, e é a única sugestão desta lista que não pode ser</p>
+<p>feita em paralelo com as outras — ela precede.</p>
+<p><b>2. Definir o piso de consumo pelo percentil 90 da base instalada, não pela média.</b> O</p>
+<p>piso é o que transforma a mudança de aposta em não-evento comercial, e calibrá-lo pela</p>
+<p>média é o erro que anula seu propósito: metade da base ficaria acima dele e veria variância</p>
+<p>mesmo assim. Calibrado pelo percentil 90, nove em cada dez clientes têm fatura previsível e</p>
+<p>a empresa ainda captura o excedente de quem consome muito. O mecanismo é psicológico e</p>
+<p>orçamentário, não econômico: o que se está comprando com o piso é a ausência de conversa</p>
+<p>difícil na renovação. Dono: finanças. Gate: o piso precisa estar definido antes de qualquer</p>
+<p>comunicação ao cliente, porque a comunicação vende o piso, não o consumo.</p>
+<p><b>3. Escalonar por janela de renovação, começando pelos contratos que vencem mais tarde.</b></p>
+<p>A concentração de 40% da base numa única janela elimina o grupo de controle natural, e sem</p>
+<p>grupo de controle a empresa descobre que errou depois de já ter errado com quase metade da</p>
+<p>receita. Começar pelos vencimentos distantes cria a coorte de aprendizado que o cronograma</p>
+<p>atual não permite: a comunicação é testada, ajustada, e só então alcança a janela</p>
+<p>concentrada. O custo é dois trimestres de margem inferior; o retorno é a informação. Dono:</p>
+<p>comercial. Gate: a janela concentrada não é tocada antes de dez renovações escalonadas</p>
+<p>terem sido fechadas e analisadas.</p>
+<p>**4. Entrevistar cinco aprovadores de orçamento — não usuários — sobre como uma fatura</p>
+<p>variável entraria no processo de aprovação deles.** Este é o teste do risco de <a class="anchor" href="#i3.1">§3.1</a>, que</p>
+<p>apareceu numa lente só e sobreviveu à refutação. O mecanismo é estrutural: quem aprova</p>
+<p>orçamento em comprador jurídico costuma ser avaliado por não estourar a previsão, e para</p>
+<p>essa pessoa variabilidade é risco de carreira, não preço melhor. Se três ou mais</p>
+<p>descreverem fricção estrutural no processo, o piso deixa de ser mitigação e vira o produto</p>
+<p>— a comunicação inteira muda de eixo. Dono: comercial ou pesquisa. Gate: resultado na mesa</p>
+<p>antes de fechar a mensagem de lançamento. Custa uma semana.</p>
+<p><b>5. Definir a unidade faturável em termos de valor entregue, não de trabalho consumido.</b></p>
+<p>Faturar por página processada cria um incentivo interno para não melhorar a eficiência da</p>
+<p>extração, porque eficiência maior significa menos unidades faturáveis pelo mesmo valor</p>
+<p>entregue ao cliente. Faturar por contrato analisado desarma isso na origem: o produto pode</p>
+<p>ficar arbitrariamente mais eficiente sem que a receita caia. O risco é de médio prazo, não</p>
+<p>aparece no primeiro ano, e é caro de desfazer porque exige mexer no preço outra vez. Dono:</p>
+<p>produto. Gate: a escolha da unidade é reversível agora e cara depois — decidir antes do</p>
+<p>lançamento, não durante.</p>
+<h3 id="i6.5"><span class="idtag">6.5</span>  O que este dossiê não resolve</h3>
+<p>O custo unitário de inferência, levantado pela anti-tese, ficou fora de escopo por</p>
+<p>instrução e é o item com maior potencial de inverter a recomendação. Se ele estiver</p>
+<p>crescendo mais rápido do que qualquer tabela acompanha, a decisão de preço está sendo</p>
+<p>usada para adiar a decisão de custo. O painel não tinha os dados para julgar isso.</p>
+<p>Também não resolve o valor da tabela nova — apenas a arquitetura do modelo. E não avalia</p>
+<p>se a Meridian tem capacidade operacional de faturamento para suportar consumo, que é uma</p>
+<p>pergunta de engenharia, não de estratégia.</p>
+<h3 id="i6.6"><span class="idtag">6.6</span>  Falsificadores</h3>
+<p>Cada item abaixo é uma previsão que pode ser checada, e que se falhar derruba parte deste</p>
+<p>dossiê. A dispersão de uso medida em 6.4.1 será alta o bastante para justificar a migração.</p>
+<p>Pelo menos três dos cinco aprovadores entrevistados descreverão fricção estrutural com</p>
+<p>fatura variável. Nas dez primeiras renovações escalonadas, menos de dois clientes pedirão</p>
+<p>para permanecer no modelo antigo. Se as duas primeiras falharem juntas, a recomendação</p>
+<p>inteira deve ser reaberta, não ajustada.</p>
+<h2 id="s7"><span class="secnum">§7 Honestidade de método</span></h2>
+<p><b>Descartados e por quê.</b> Três itens do painel não subiram para o corpo do dossiê. Um</p>
+<p>deles — a sugestão de testar preço em prospects antes da base — foi descartado porque</p>
+<p>prospects não têm o custo de troca que define o problema, então o teste não seria</p>
+<p>informativo. Outro, sobre empacotar o consumo como crédito pré-pago, foi absorvido dentro</p>
+<p>da sugestão do piso, que resolve o mesmo problema com menos mecânica. O terceiro era uma</p>
+<p>repetição do item 1.1 em outras palavras, vinda de uma segunda lente.</p>
+<p><b>Onde este dossiê é fraco — a honestidade de método exige dizer isto antes que alguém pergunte.</b> A anti-tese não foi respondida, foi registrada — o painel não</p>
+<p>tinha dados de custo unitário para julgá-la, e isso é uma lacuna real, não um detalhe. A</p>
+<p>convergência de §1 vem de quatro lentes rodadas contra três modelos, o que reduz mas não</p>
+<p>elimina o risco de erro correlacionado: modelos treinados de forma parecida podem errar</p>
+<p>juntos, e três lentes concordando pode ser um único erro repetido. As notas de §5 são</p>
+<p>sinal fraco e estão rotuladas como tal no próprio texto.</p>
+<p><b>A refutação e o que ela fez.</b> Cada item convergente e cada única passou por um passo de</p>
+<p>refutação em modelo de família distinta, instruído a construir o caso contra. Esse passo</p>
+<p>tem viés medido a favor de refutar — ele reprova mais do que deveria — então o resultado</p>
+<p>foi usado como gerador de profundidade, não como juiz. O item de <a class="anchor" href="#i3.1">§3.1</a> é o único que</p>
+<p>sobreviveu inteiro; o de <a class="anchor" href="#i3.2">§3.2</a> foi enfraquecido de &quot;risco provável&quot; para &quot;risco de desenho&quot;,</p>
+<p>e o texto reflete isso.</p>
+<p><b>Drill-down.</b> Cada citação deste dossiê foi verificada por código contra a resposta</p>
+<p>original do conselheiro a quem é atribuída, e o texto integral de cada célula fica gravado</p>
+<p>junto ao run — os itens acima podem ser abertos até a fonte. Nenhuma citação foi editada</p>
+<p>para caber no texto; onde havia corte, ele está marcado com reticências.</p></main></body></html>
