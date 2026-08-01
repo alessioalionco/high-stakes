@@ -151,8 +151,21 @@ def check_no_leak(query: str, denylist: list[str]) -> None:
     for token in denylist:
         tf, ta = _fold(token), _fold_amplo(token)
         ascii_usable = bool(tf) and not _lost_info(token)
-        # (1) forma ASCII dobrada — só se o token não perdeu informação.
-        if ascii_usable and tf in qf:
+        # (1) forma ASCII dobrada, COM fronteira de palavra — só se o token não perdeu
+        # informação. `tf in qf` (substring crua, como estava desde o código original)
+        # recusa a query inocente que apenas contém a sigla dentro de uma palavra:
+        # denylist ["SA"] barrava "casa", ["Co"] barrava "compra", ["res"] barrava
+        # "resultado". O `\b` dos dois lados resolve sem perder nada de multi-palavra:
+        # `tf` já está dobrado para [0-9a-z ] com espaço simples, e `qf` também, então
+        # "acme corp" casa em "resumo da acme corp hoje" e em "acme-corp" (o separador
+        # já virou espaço no fold). O token embutido num run maior ("AcmeCorpLtda") não
+        # vem daqui — vem do passo (2b), que é onde ele sempre esteve.
+        #
+        # O que se perde, dito na cara: token CURTO de palavra única deixa de casar com
+        # a forma sufixada ("Acme" não pega mais "Acmes"). É o preço da fronteira, e o
+        # >=7 do (2b) cobre o caso realista, porque denylist de verdade traz o nome
+        # inteiro ("Acme Corp"), não o radical.
+        if ascii_usable and re.search(rf"\b{re.escape(tf)}\b", qf):
             raise LeakBlocked(
                 f"query bloqueada: contém token sensível {token!r}. "
                 "Abstraia a query antes de enviar (no-leak)."

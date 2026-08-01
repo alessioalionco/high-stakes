@@ -173,6 +173,38 @@ def main() -> int:
         except LeakBlocked:
             case("C4: token curto não recusa texto inocente por colagem", False)
 
+        # C5 — a MESMA falta de fronteira, no passo (1). Escrito depois de atacar a
+        # CLASSE em vez do caso: o C4 acima passava por sorte (a substring "oc" não
+        # ocorre naquela query específica), e o passo (1) `tf in qf` nunca teve fronteira
+        # nenhuma — é substring crua na query dobrada, desde o código original.
+        # Por que importa mais do que parece: a doutrina diz "falso positivo é seguro".
+        # É seguro para o dado e péssimo para o guard — um no-leak que recusa "casa"
+        # porque a denylist tem "SA" ensina o usuário a encurtar a denylist, e aí o falso
+        # positivo vira o vetor do vazamento. Cada caso abaixo é uma palavra comum de
+        # português/inglês de negócio que carrega a sigla dentro.
+        for tok, q, onde in [("SA",  "qual o uso da casa",            "casa"),
+                             ("Co",  "analise de compra recorrente",  "compra"),
+                             ("oc",  "o processo de vendas",          "processo"),
+                             ("res", "resultado do trimestre",        "resultado"),
+                             ("rr",  "qual a barreira de entrada",    "barreira")]:
+            try:
+                check_no_leak(q, [tok])
+                case(f"C5: token {tok!r} não recusa por estar dentro de {onde!r}", True)
+            except LeakBlocked:
+                case(f"C5: token {tok!r} não recusa por estar dentro de {onde!r}", False)
+
+        # C6 — e o passo (1) continua pegando o que é pra pegar (multi-palavra, separador
+        # trocado, e o token longo embutido num run maior via squash).
+        for tok, q, desc in [("Acme Corp", "resumo da Acme Corp hoje",   "multi-palavra"),
+                             ("Acme Corp", "resumo da Acme-Corp hoje",   "separador trocado"),
+                             ("Acme Corp", "relatorio da AcmeCorpLtda",  "embutido num run maior"),
+                             ("Acme Corp", "dados de Aсme Cоrp",         "homoglifo cirílico")]:
+            try:
+                check_no_leak(q, [tok])
+                case(f"C6: passo (1) ainda bloqueia — {desc}", False)
+            except LeakBlocked:
+                case(f"C6: passo (1) ainda bloqueia — {desc}", True)
+
         # ---- REGRESSÃO: omitir a denylist não pode ser o caminho permissivo ----
         spy = SpyClient()
         try:
