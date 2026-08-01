@@ -146,8 +146,7 @@ def check_no_leak(query: str, denylist: list[str]) -> None:
     Falso positivo é seguro (recusa enviar); falso negativo vaza. Na dúvida, bloquear.
     """
     qf, qa = _fold(query), _fold_amplo(query)
-    qwords = qf.split()      # fronteira de palavra para o squash
-    qsquash = _squash(query)  # query colada, para o token longo embutido num run maior
+    qwords = qf.split()  # fronteira de palavra: o squash compara contra PALAVRA
     for token in denylist:
         tf, ta = _fold(token), _fold_amplo(token)
         ascii_usable = bool(tf) and not _lost_info(token)
@@ -180,16 +179,28 @@ def check_no_leak(query: str, denylist: list[str]) -> None:
         #        o ponto; sem ela o passo (2) vira o corte por comprimento outra vez, só
         #        que implícito e invisível.
         #
-        #   (2b) SUBSTRING na query inteira colada, só para token longo (>=7). Aqui a
-        #        colisão é improvável (medido no review: ~0 em >=7, +10pp em 4 chars) e
-        #        é o que pega o token embutido num run maior ("AcmeCorpLtda"), que a
-        #        igualdade sozinha perderia. Mantido do desenho anterior de propósito:
-        #        trocar `in` por `==` sem isto seria trocar um falso positivo por um
-        #        vazamento silencioso.
+        #   (2b) SUBSTRING DENTRO DE UMA PALAVRA da query — é o que pega o token colado
+        #        num run maior ("Acme Corp" em "AcmeCorpLtda"). Duas escolhas aqui, e as
+        #        duas foram erro antes:
+        #
+        #        · o alvo é a PALAVRA, não a query inteira colada. Colar a query gruda
+        #          toda fronteira ("big companhia" -> "bigcompanhia") e inventa colisão
+        #          entre palavras que apenas se tocam. Por palavra, isso não acontece.
+        #
+        #        · a porta de entrada é `len>=7 OU (multi-palavra e len>=5)`, não `>=7`
+        #          seco. O corte em 7 deixava passar exatamente o caso mais comum que
+        #          existe: nome curto + sufixo societário. "Big Co" (squash 5) não
+        #          bloqueava "BigCoLtda"; "Acme SA" (6) não bloqueava "AcmeSALtda".
+        #          Token de várias palavras carrega fronteira interna, então casar por
+        #          acaso dentro de uma palavra é bem menos provável que num token curto
+        #          de palavra única — por isso ele entra a partir de 5, e o de palavra
+        #          única só a partir de 7. Sem a cláusula multi-palavra, uma denylist com
+        #          "senha" recusaria "desenhado"; com ela, não.
         if ascii_usable:
             ts = _squash(token)
+            elegivel_substring = len(ts) >= 7 or (len(tf.split()) >= 2 and len(ts) >= 5)
             if ts and (any(ts == w for w in qwords)
-                       or (len(ts) >= 7 and ts in qsquash)):
+                       or (elegivel_substring and any(ts in w for w in qwords))):
                 raise LeakBlocked(
                     f"query bloqueada: contém token sensível {token!r}. "
                     "Abstraia a query antes de enviar (no-leak)."

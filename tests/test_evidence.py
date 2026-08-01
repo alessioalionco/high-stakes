@@ -205,6 +205,38 @@ def main() -> int:
             except LeakBlocked:
                 case(f"C6: passo (1) ainda bloqueia — {desc}", True)
 
+        # C7 — VAZAMENTO no penhasco do >=7. Achado no review do próprio fix do C5:
+        # o passo (2b) só olhava token com squash >=7, então o token colado dentro de um
+        # run MAIOR escapava quando o squash tinha 5 ou 6 chars. "Big Co" não bloqueava
+        # "BigCoLtda" e "Acme SA" não bloqueava "AcmeSALtda" — nome de empresa seguido de
+        # sufixo societário é a forma mais comum que existe. Não é regressão do C5 (já
+        # vazava antes), mas o comentário do (2b) dizia pegar "o token embutido num run
+        # maior", e isso só era verdade acima de 7 chars. Over-claim meu, no código.
+        for tok, q in [("Big Co",    "receita da BigCoLtda em 2025"),
+                       ("Acme SA",   "o caso AcmeSALtda"),
+                       ("Big Co",    "sobre BigCoHoldings"),
+                       ("Big Co",    "sobre a HoldingBigCo"),
+                       ("Acme Corp", "relatorio da AcmeCorpLtda")]:
+            try:
+                check_no_leak(q, [tok])
+                case(f"C7: {tok!r} colado num run maior ({q.split()[-1]}) vaza", False)
+            except LeakBlocked:
+                case(f"C7: {tok!r} colado num run maior ({q.split()[-1]}) vaza", True)
+
+        # C8 — e o remédio do C7 não pode reabrir o C4/C5. O token curto de UMA palavra
+        # continua fora do caminho de substring; só entra token longo (>=7) ou token
+        # multi-palavra com >=5 (que carrega fronteira interna e não colide por acaso).
+        for tok, q, onde in [("SA",    "qual o uso da casa",           "casa"),
+                             ("oc",    "o processo de vendas",         "processo"),
+                             ("res",   "resultado do trimestre",       "resultado"),
+                             ("senha", "o fluxo desenhado pelo time",  "desenhado"),
+                             ("a b",   "o trabalho do time",           "trabalho")]:
+            try:
+                check_no_leak(q, [tok])
+                case(f"C8: token {tok!r} segue sem recusar {onde!r}", True)
+            except LeakBlocked:
+                case(f"C8: token {tok!r} segue sem recusar {onde!r}", False)
+
         # ---- REGRESSÃO: omitir a denylist não pode ser o caminho permissivo ----
         spy = SpyClient()
         try:
