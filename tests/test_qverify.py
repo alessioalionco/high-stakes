@@ -187,6 +187,19 @@ def main() -> int:
                  _advisor_for("The Movement Builder", ["movement builder", "unit economist"]) == "movement builder"),
             case("papel ainda vence o nome dentro do heading",
                  _advisor_for("Anti-tese do The Unit Economist", ["unit economist"]) == "antitese"),
+            # REGRESSÃO: atribuição em PROSA era invisível aos DOIS gates (ambos exigiam
+            # startswith('>')), então uma quote fabricada fora de blockquote passava
+            # enquanto qualquer quote legítima mantinha `findings` não-vazio.
+            case("REGRESSÃO: atribuição FORA de blockquote é acusada",
+                 any(f["status"] == "atribuicao_fora_de_quote" for f in verify(
+                     '## §1 x\n### 1.1 y\nTexto solto — **The Unit Economist** (lente simulada · X)\n',
+                     cells))),
+            # REGRESSÃO: quote de DUAS linhas com bold interno tinha a 1ª linha acusada de
+            # malformada e a MESMA quote logo abaixo como verificada — vermelho contraditório.
+            case("REGRESSÃO: bold interno em quote multi-linha NÃO vira malformada",
+                 not any(f["status"] == "atribuicao_malformada" for f in verify(
+                     '## §1 x\n### 1.1 y\n> "Ele disse que o **ônus da prova** é do deck\n'
+                     '> e ninguém contestou." — **The Unit Economist** (lente simulada · X)\n', cells))),
         ]
         print(f"{sum(results)}/{len(results)} testes ok")
         return 0 if all(results) else 1

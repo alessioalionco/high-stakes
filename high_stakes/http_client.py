@@ -21,7 +21,7 @@ import time
 import urllib.error
 import urllib.request
 
-__all__ = ["RequestException", "Response", "Session"]
+__all__ = ["DeadlineExceeded", "RequestException", "Response", "Session"]
 
 # Tetos de leitura. Corpo remoto sem limite é DoS trivial: uma resposta sem newline
 # fazia `readline()` bufferizar o stream inteiro (medido: 27 MB -> 294 MB de RSS), e o
@@ -32,6 +32,12 @@ MAX_LINE_BYTES = 4 * 1024 * 1024
 
 class RequestException(Exception):
     """Falha de transporte: DNS, conexão recusada, timeout. Transiente -> retry."""
+
+
+class DeadlineExceeded(Exception):
+    """Prazo de PAREDE estourado. Deliberadamente NÃO herda de RequestException: o retry
+    trata transporte como transiente, e retentar um prazo estourado multiplicava a espera
+    pelo número de tentativas (4 × 1200s = 80 min) queimando gerações pagas."""
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -79,13 +85,14 @@ class Response:
     def _check_deadline(self) -> None:
         if self._deadline is not None and time.monotonic() > self._deadline:
             self.close()
-            raise RequestException(
+            raise DeadlineExceeded(
                 f"prazo de parede estourado lendo {self.url} — o socket seguia vivo, "
                 "mas a resposta não completou a tempo")
 
     @property
     def text(self) -> str:
         if self._text is None:
+            self._check_deadline()  # o retry lê .text em todo 429/5xx/4xx
             try:
                 body = self._raw.read(MAX_BODY_BYTES)
             except Exception:  # corpo já consumido/socket morto -> texto vazio, não crash

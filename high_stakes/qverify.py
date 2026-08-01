@@ -173,21 +173,45 @@ def _match(qnorm: str, corpus: dict[str, list[str]], advisor: str | None) -> tup
 ATTRIB_LOOSE_RE = re.compile(r"—\s*\*\*.+?\*\*")
 
 
-def _malformed_attributions(report_md: str) -> list[str]:
-    """Linhas de quote que o gate conta como atribuídas e o parse estrito não captura."""
-    ruins = []
+def _malformed_attributions(report_md: str) -> list[tuple[str, str]]:
+    """[(status, linha)] das atribuições que o parse estrito NÃO captura.
+
+    Trabalha por BLOCO de blockquote, não por linha: uma quote legítima de duas linhas com
+    bold interno tinha a 1ª linha acusada de malformada e a MESMA quote aparecia logo
+    abaixo como verificada — vermelho com mensagem contraditória.
+
+    E varre também FORA do blockquote: uma atribuição em prosa era invisível aos dois
+    gates (ambos exigiam `startswith(">")`), então uma quote fabricada fora de `>` passava
+    enquanto qualquer quote legítima no documento mantinha `findings` não-vazio.
+    """
+    ruins: list[tuple[str, str]] = []
+    bloco: list[str] = []
+
+    def fecha(b: list[str]) -> None:
+        if not b:
+            return
+        tem_frouxa = any(ATTRIB_LOOSE_RE.search(l) for l in b)
+        tem_estrita = any(ATTRIB_END_RE.search(l.lstrip("> ").rstrip()) for l in b)
+        if tem_frouxa and not tem_estrita:
+            ruins.append(("atribuicao_malformada", b[-1].strip()))
+
     for ln in report_md.splitlines():
-        if ln.startswith(">") and ATTRIB_LOOSE_RE.search(ln):
-            if not ATTRIB_END_RE.search(ln.lstrip("> ").rstrip()):
-                ruins.append(ln.strip())
+        if ln.startswith(">"):
+            bloco.append(ln)
+            continue
+        fecha(bloco); bloco = []
+        if ATTRIB_LOOSE_RE.search(ln):
+            # atribuição em PROSA: tipografia de citação sem ser citação
+            ruins.append(("atribuicao_fora_de_quote", ln.strip()))
+    fecha(bloco)
     return ruins
 
 
 def verify(report_md: str, cells_dir: Path) -> list[dict]:
     corpus = cell_corpus(cells_dir)
     findings = []
-    for ln in _malformed_attributions(report_md):
-        findings.append({"tipo": "quote", "advisor": "?", "status": "atribuicao_malformada",
+    for status, ln in _malformed_attributions(report_md):
+        findings.append({"tipo": "quote", "advisor": "?", "status": status,
                          "onde": "", "quote": ln[:120]})
     for text, name in _joined_quotes(report_md):
         qnorm = normalize(text)

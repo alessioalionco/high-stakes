@@ -36,7 +36,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from .http_client import RequestException, Response, Session
+from .http_client import DeadlineExceeded, RequestException, Response, Session
 
 try:  # POSIX (macOS/Linux). Sem fcntl o lock degrada p/ no-op — ver _file_lock.
     import fcntl
@@ -301,6 +301,18 @@ class BudgetLedger:
                     f"${self.cap_usd:.2f} — interrompendo próximos dispatches"
                 )
 
+    def charge_extra(self, usd: float) -> None:
+        """Cobra gasto SEM mexer em reserva: tentativas anteriores de um retry que já
+        rodaram no provedor. O retry redispara até MAX_RETRIES gerações completas, e o
+        ledger contabilizava UMA — subcontagem de até 4x, invisível para o cap."""
+        if usd <= 0:
+            return
+        with self._lock:
+            if self._persist:
+                self._commit(usd, 0)
+            else:
+                self._spent += usd
+
     def charge_failure(self, est_usd: float) -> None:
         """Call falhou pós-dispatch: contabiliza a ESTIMATIVA como gasto
         (conservador — stream dropado pode ter sido cobrado). Sem cap-raise aqui
@@ -466,7 +478,7 @@ class ORClient:
         }
 
         try:
-            data = self._post_with_retry(headers, payload, timeout)
+            data, geradas = self._post_with_retry(headers, payload, timeout)
         except Exception:
             # CONSERVADOR: streams dropados podem ter sido cobrados upstream —
             # contabiliza a ESTIMATIVA como gasto em vez de soltar a reserva.
@@ -485,6 +497,12 @@ class ORClient:
                 + usage.get("completion_tokens", 0) * out_price
             )
         cost = float(cost or 0.0)
+        if geradas:
+            # tentativas anteriores rodaram no provedor: estimativa cada, senão o gasto
+            # real fica até 4x acima do que o ledger conhece.
+            print(f"[ledger] {geradas} tentativa(s) anterior(es) já gerada(s) — "
+                  f"cobrando ${est * geradas:.4f} além do custo final.")
+            self.ledger.charge_extra(est * geradas)
         self.ledger.reconcile(est, cost)
 
         choice = (data.get("choices") or [{}])[0]
@@ -503,8 +521,10 @@ class ORClient:
 
     def _post_with_retry(
         self, headers: dict, payload: dict, timeout: int
-    ) -> dict:
+    ) -> tuple[dict, int]:
+        """Devolve (resposta, nº de tentativas ANTERIORES que já geraram no provedor)."""
         last_exc: Exception | None = None
+        geradas = 0  # tentativas que chegaram a produzir (e portanto foram cobradas lá)
         for attempt in range(MAX_RETRIES):
             try:
                 resp = self._session.post(
@@ -532,7 +552,7 @@ class ORClient:
                 )
 
             try:
-                return self._consume_stream(resp)
+                return self._consume_stream(resp), geradas
             except (RequestException, OSError) as exc:
                 # Transporte caiu com o stream já aberto (RST, timeout de leitura,
                 # IncompleteRead). É a falha DOMINANTE numa chamada de 300-1200s, e antes
@@ -542,13 +562,16 @@ class ORClient:
                 self._sleep_backoff(attempt, None)
                 continue
             except ORClient._Retriable as exc:
-                # erro-em-corpo-200 com code transiente (ex: 502 'connection lost')
+                # erro-em-corpo-200 ou stream truncado: o upstream JÁ rodou e cobrou
+                geradas += 1
                 last_exc = exc
                 resp.close()  # stream aberto -> fecha antes de re-tentar
                 self._sleep_backoff(attempt, None)
                 continue
 
-        raise RuntimeError(f"OpenRouter falhou após {MAX_RETRIES} tentativas: {last_exc}")
+        raise RuntimeError(
+            f"OpenRouter falhou após {MAX_RETRIES} tentativas ({geradas} já geradas "
+            f"e cobradas pelo provedor): {last_exc}")
 
     @staticmethod
     def _consume_stream(resp: Response) -> dict:

@@ -27,7 +27,7 @@ from high_stakes.or_client import BudgetExceeded, BudgetLedger, ORClient
 import urllib.request
 
 from high_stakes import http_client
-from high_stakes.http_client import RequestException, Session
+from high_stakes.http_client import DeadlineExceeded, RequestException, Session
 
 ROOT = Path(__file__).resolve().parents[1]  # raiz do repo/plugin
 
@@ -216,8 +216,22 @@ def main() -> int:
         try:
             list(r.iter_lines())
             case("REGRESSÃO: prazo de parede vencido interrompe a leitura", False)
-        except RequestException:
+        except DeadlineExceeded:
             case("REGRESSÃO: prazo de parede vencido interrompe a leitura", True)
+
+        # REGRESSÃO: o prazo é TERMINAL. Se herdasse de RequestException, o retry o
+        # trataria como transiente e a espera viraria 4× o timeout, queimando 4 gerações.
+        case("REGRESSÃO: prazo de parede NÃO é transporte (não entra no retry)",
+             not issubclass(DeadlineExceeded, (RequestException, OSError)))
+
+        # REGRESSÃO: .text é lido em todo 429/5xx — também respeita o prazo
+        r = s.get(f"{base}/429", timeout=5)
+        r._deadline = time.monotonic() - 1
+        try:
+            _ = r.text
+            case("REGRESSÃO: .text respeita o prazo de parede", False)
+        except DeadlineExceeded:
+            case("REGRESSÃO: .text respeita o prazo de parede", True)
 
         # ---- integração: chat() completo contra o servidor ----
         or_client.OPENROUTER_BASE = f"{base}/api/v1"
@@ -320,6 +334,22 @@ def main() -> int:
         # ---- REGRESSÃO: o TTL da reserva cobre o pior caso de uma chamada ----
         case("REGRESSÃO: TTL > MAX_RETRIES × timeout máximo (não poda reserva em voo)",
              or_client.RESERVATION_TTL_S >= or_client.MAX_RETRIES * 1200)
+
+        # ---- REGRESSÃO: tentativas que JÁ GERARAM são cobradas ----
+        # O retry redispara até MAX_RETRIES gerações completas e o ledger contabilizava
+        # UMA: subcontagem de até 4x, invisível para o cap. Reproduzido no review com um
+        # stream completo faltando só o [DONE]: 4 dispatches reais, $0.20 registrado.
+        Handler.mode = "corta_no_meio"; Handler.hits = 0
+        led_g = BudgetLedger(cap_usd=50.0, ledger_path=tmp / "ger" / "cost-ledger.json")
+        cg = ORClient(ledger=led_g, api_key="k", outputs_dir=tmp / "ger")
+        antes = led_g.spent
+        try:
+            cg.chat("test/model", [{"role": "user", "content": "oi"}], max_tokens=16)
+        except Exception:
+            pass
+        case("REGRESSÃO: as 4 tentativas geradas somam no gasto, não 1",
+             led_g.spent > antes and Handler.hits == or_client.MAX_RETRIES)
+        Handler.mode = "ok"
 
         # ---- T4: cap cross-processo ----
         p4 = tmp / "run4" / "cost-ledger.json"

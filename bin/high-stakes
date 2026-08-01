@@ -22,8 +22,18 @@ if [ "$#" -lt 1 ]; then
     exit 2
 fi
 
-# dirname do próprio script -> raiz da instalação (um nível acima de bin/)
-ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+# Resolve symlinks antes do dirname: `ln -s .../bin/high-stakes ~/.local/bin/high-stakes`
+# é a forma padrão de pôr um launcher no PATH, e sem desreferenciar o dirname apontaria
+# para ~/.local/bin — reproduzindo o ModuleNotFoundError que este script existe para matar.
+SRC="$0"
+while [ -L "$SRC" ]; do
+    LINK=$(readlink "$SRC")
+    case "$LINK" in
+        /*) SRC="$LINK" ;;
+        *)  SRC="$(dirname -- "$SRC")/$LINK" ;;
+    esac
+done
+ROOT=$(CDPATH= cd -- "$(dirname -- "$SRC")/.." && pwd)
 CMD="$1"
 shift
 

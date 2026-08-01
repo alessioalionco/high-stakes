@@ -86,6 +86,16 @@ def main() -> int:
 
         case("REGRESSÃO: o launcher existe e é executável",
              os.access(LAUNCHER, os.X_OK))
+        # REGRESSÃO: `ln -s .../bin/high-stakes ~/.local/bin/` é a forma padrão de pôr um
+        # launcher no PATH. Sem desreferenciar o symlink, o dirname apontava para o
+        # diretório do link e reproduzia o ModuleNotFoundError original.
+        link = tmp / "link-high-stakes"
+        os.symlink(LAUNCHER, link)
+        r_link = subprocess.run([str(link), "paths", "core"], cwd=tmp, env=env,
+                                capture_output=True, text=True)
+        case("REGRESSÃO: o launcher funciona invocado por SYMLINK",
+             r_link.returncode == 0 and Path(r_link.stdout.strip()).is_dir(),
+             r_link.stderr[-200:])
         r_nu = subprocess.run([sys.executable, "-m", "high_stakes.paths", "core"],
                               cwd=tmp, env=env, capture_output=True, text=True)
         case("REGRESSÃO: `python3 -m high_stakes.X` SEM PYTHONPATH falha — é por isso "
