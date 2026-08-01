@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -48,10 +49,37 @@ class LeakBlocked(RuntimeError):
     """Query externa contém token sensível -> recusa rodar (no-leak fechado)."""
 
 
+def _fold(s: str) -> str:
+    """Forma canônica para comparar: o bypass do guard era trivial sem isto.
+
+    Confirmado no review: com denylist ["Acme Corp"], passavam "Acme  Corp" (espaço
+    duplo), "Acme\nCorp", "Acme-Corp", "Acme\u200bCorp" (zero-width) e "Acme\xa0Corp"
+    (NBSP); com ["Sao Paulo"], passava "São Paulo". Todas reescritas naturais, nenhuma
+    exótica — e o guard tem UM trabalho.
+
+    Falso positivo aqui é seguro (recusa enviar); falso negativo vaza.
+    """
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(c for c in s if unicodedata.category(c) not in ("Mn", "Cf"))
+    s = s.casefold()
+    return re.sub(r"[^0-9a-z]+", " ", s).strip()
+
+
+def _squash(s: str) -> str:
+    """Como _fold, mas sem separador NENHUM.
+
+    Necessário porque apagar um caractere invisível JUNTA as palavras: "Acme\u200bCorp"
+    vira "acmecorp", que não contém "acme corp". Remover o disfarce criava o bypass. Comparar
+    também a forma colada fecha isso — e um token colado só casa com texto colado, então
+    não inventa falso positivo entre palavras que apenas se tocam."""
+    return re.sub(r"[^0-9a-z]+", "", _fold(s))
+
+
 def check_no_leak(query: str, denylist: list[str]) -> None:
-    q = query.lower()
+    q, qs = _fold(query), _squash(query)
     for token in denylist:
-        if token.lower() in q:
+        tf, ts = _fold(token), _squash(token)
+        if (tf and tf in q) or (ts and ts in qs):
             raise LeakBlocked(
                 f"query bloqueada: contém token sensível {token!r}. "
                 "Abstraia a query antes de enviar (no-leak)."
@@ -77,6 +105,21 @@ def body_leak_suspect(text: str, domain_blocklist: list[str] | None) -> bool:
     citation formal) -> leak_suspect."""
     t = (text or "").lower()
     return any(b.lower() in t for b in domain_blocklist or [])
+
+
+_DENYLIST_OMITIDA = object()  # sentinela: distingue "não passou" de "passou None"
+
+
+def _resolve_denylist(denylist):
+    """Omitir a denylist era o caminho PERMISSIVO: o default `None` desligava o guard, e
+    quem esquecesse o kwarg despachava sem checagem nenhuma — enquanto o erro mais
+    inocente (`[]`) falhava duro. Agora omitir é erro; `None` tem de ser digitado."""
+    if denylist is _DENYLIST_OMITIDA:
+        raise ValueError(
+            "denylist é obrigatória. Passe a lista de tokens sensíveis, ou passe "
+            "explicitamente denylist=None para declarar que esta query é pública. "
+            "Omitir não é uma opção: o silêncio não pode ser o caminho que despacha.")
+    return denylist
 
 
 def _check_denylist_config(denylist: list[str] | None) -> None:
@@ -125,7 +168,7 @@ def extract_citations(raw: dict, domain_blocklist: list[str] | None = None) -> l
 
 
 def research(client, ask: dict, *, evidence_model: str,
-             denylist: list[str] | None = None,
+             denylist=_DENYLIST_OMITIDA,
              domain_blocklist: list[str] | None = None,
              system_prompt: str = _DEFAULT_SYSTEM,
              max_tokens: int = 4000, temperature: float = 0.2,
@@ -135,6 +178,7 @@ def research(client, ask: dict, *, evidence_model: str,
     `denylist=None` desliga o no-leak (claims públicas vão verbatim);
     lista não-vazia = falha FECHADA se a query contiver token sensível.
     """
+    denylist = _resolve_denylist(denylist)
     _check_denylist_config(denylist)  # []=misconfig, falha FECHADA
     query = ask["query"]
     if denylist:
@@ -164,9 +208,22 @@ def research(client, ask: dict, *, evidence_model: str,
     }
 
 
-def load_reuse(ask: dict, base_dir: Path) -> dict:
+def load_reuse(ask: dict, base_dir: Path, domain_blocklist: list[str] | None = None) -> dict:
     """Ask com `reuse`: lê material local (não gasta call). Path relativo a base_dir."""
-    reuse_dir = (Path(base_dir) / ask["reuse"]).resolve()
+    base = Path(base_dir).resolve()
+    alvo = Path(ask["reuse"])
+    # `base / "/abs"` DESCARTA a base; `../..` escapa. O conteúdo lido daqui entra no
+    # prefixo compartilhado de todas as células pagas e vai para o provedor externo — e
+    # `check_no_leak` nunca o vê. Confirmado no review: lia OPENROUTER_API_KEY de fora.
+    if alvo.is_absolute():
+        raise ValueError(f"reuse não pode ser caminho absoluto: {ask['reuse']!r}")
+    reuse_dir = (base / alvo).resolve()
+    try:
+        reuse_dir.relative_to(base)
+    except ValueError:
+        raise ValueError(
+            f"reuse {ask['reuse']!r} escapa de {base} — material reusado entra no prompt "
+            "pago sem passar pelo no-leak.") from None
     files = sorted(reuse_dir.glob("*.md")) if reuse_dir.exists() else []
     body = "\n\n".join(f"### {f.name}\n{f.read_text()[:6000]}" for f in files)
     return {
@@ -175,7 +232,9 @@ def load_reuse(ask: dict, base_dir: Path) -> dict:
         "query": "(reuso de material local — sem call nova)",
         "answer": body or "(material de reuso não encontrado)",
         "citations": [{"url": str(reuse_dir), "tier": "media", "blocked": False}],
-        "leak_suspect": False,
+        # o material reusado é conteúdo como qualquer outro: se cita domínio bloqueado,
+        # é suspeito. Antes vinha False fixo, contrariando o contrato do módulo.
+        "leak_suspect": body_leak_suspect(body, domain_blocklist),
         "cost_usd": 0.0,
         "provider": "local-reuse",
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -184,7 +243,7 @@ def load_reuse(ask: dict, base_dir: Path) -> dict:
 
 def run_asks(client, asks: list[dict], *, evidence_model: str,
              cache_dir: Path, base_dir: Path,
-             denylist: list[str] | None = None,
+             denylist=_DENYLIST_OMITIDA,
              domain_blocklist: list[str] | None = None,
              only_first: bool = False) -> list[dict]:
     """Roda os asks (cache keyed por id+hash de input em cache_dir; `reuse` lê local).
@@ -192,6 +251,7 @@ def run_asks(client, asks: list[dict], *, evidence_model: str,
     Cache: filename = id sanitizado + hash10(query+modelo+blocklist+denylist) —
     qualquer mudança invalida. Cache corrompido -> re-fetch (não crash). Ao LER
     do cache, blocked/leak_suspect são RE-derivados com a blocklist ATUAL."""
+    denylist = _resolve_denylist(denylist)
     _check_denylist_config(denylist)
     cache_dir = Path(cache_dir)
     asks = asks[:1] if only_first else asks
@@ -199,7 +259,7 @@ def run_asks(client, asks: list[dict], *, evidence_model: str,
     for ask in asks:
         if ask.get("reuse"):
             print(f"[reuse] {ask['id']}")
-            items.append(load_reuse(ask, base_dir))
+            items.append(load_reuse(ask, base_dir, domain_blocklist))
             continue
         cached = cache_dir / _cache_filename(ask, evidence_model, denylist,
                                              domain_blocklist)

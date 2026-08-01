@@ -20,7 +20,8 @@ import tempfile
 from pathlib import Path
 
 from high_stakes.evidence import (LeakBlocked, _cache_filename, body_leak_suspect,
-                      check_no_leak, is_blocked_domain, research, run_asks, tier_for)
+                      check_no_leak, is_blocked_domain, load_reuse, research,
+                              run_asks, tier_for)
 
 
 class SpyClient:
@@ -67,6 +68,63 @@ def main() -> int:
             case("T6: match é case-insensitive", False)
         except LeakBlocked:
             case("T6: match é case-insensitive", spy.calls == 0)
+
+        # ---- REGRESSÃO: o guard tinha bypass trivial por unicode e espaço ----
+        # Todas estas passavam antes. Nenhuma é exótica: são reescritas naturais.
+        for variante, desc in [
+            ("o NRR da Acme  Corp caiu?", "espaço duplo"),
+            ("o NRR da Acme-Corp caiu?", "hífen no lugar do espaço"),
+            ("o NRR da Acme\u200bCorp caiu?", "zero-width space"),
+            ("o NRR da Acme\xa0Corp caiu?", "NBSP"),
+            ("o NRR da ACME CORP caiu?", "caixa alta"),
+        ]:
+            spy = SpyClient()
+            try:
+                research(spy, {"id": "v", "query": variante}, evidence_model="m",
+                         denylist=["Acme Corp"])
+                case(f"REGRESSÃO: bypass por {desc} é BLOQUEADO", False)
+            except LeakBlocked:
+                case(f"REGRESSÃO: bypass por {desc} é BLOQUEADO", spy.calls == 0)
+
+        spy = SpyClient()
+        try:  # acento: "Sao Paulo" na denylist tem de pegar "São Paulo"
+            research(spy, {"id": "v", "query": "faturamento em São Paulo"},
+                     evidence_model="m", denylist=["Sao Paulo"])
+            case("REGRESSÃO: bypass por acento é BLOQUEADO", False)
+        except LeakBlocked:
+            case("REGRESSÃO: bypass por acento é BLOQUEADO", spy.calls == 0)
+
+        # ---- REGRESSÃO: omitir a denylist não pode ser o caminho permissivo ----
+        spy = SpyClient()
+        try:
+            research(spy, SECRET_ASK, evidence_model="m")   # kwarg esquecido
+            case("REGRESSÃO: OMITIR a denylist é ERRO (antes era o caminho que despachava)",
+                 False)
+        except ValueError:
+            case("REGRESSÃO: OMITIR a denylist é ERRO (antes era o caminho que despachava)",
+                 spy.calls == 0)
+        spy = SpyClient()
+        try:
+            run_asks(spy, [ASK], evidence_model="m", cache_dir=tmp / "om", base_dir=tmp)
+            case("REGRESSÃO: run_asks também exige a denylist explícita", False)
+        except ValueError:
+            case("REGRESSÃO: run_asks também exige a denylist explícita", spy.calls == 0)
+
+        # ---- REGRESSÃO: reuse não pode ler fora do base_dir ----
+        # O material reusado entra no prefixo de TODAS as células pagas e vai ao provedor
+        # externo — e check_no_leak nunca o vê. O review leu OPENROUTER_API_KEY por aqui.
+        base = tmp / "runbase"
+        (base / "mat").mkdir(parents=True)
+        (base / "mat" / "ok.md").write_text("material legítimo do run")
+        (tmp / "segredo.md").write_text("OPENROUTER_API_KEY=sk-nao-pode-sair")
+        case("reuse dentro do base_dir funciona",
+             "material legítimo" in load_reuse({"id": "r", "reuse": "mat"}, base)["answer"])
+        for escape, desc in [("..", "escapa com .."), ("/etc", "é caminho absoluto")]:
+            try:
+                load_reuse({"id": "r", "reuse": escape}, base)
+                case(f"REGRESSÃO: reuse que {desc} é RECUSADO", False)
+            except ValueError:
+                case(f"REGRESSÃO: reuse que {desc} é RECUSADO", True)
 
         # ---- misconfiguração falha FECHADA ----
         spy = SpyClient()
