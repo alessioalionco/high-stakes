@@ -52,17 +52,38 @@ class LeakBlocked(RuntimeError):
 # Letras latinas que o NFKD NÃO decompõe: sem isto elas caem no `[^0-9a-z]` e são
 # APAGADAS, e apagar uma letra fura o match ("Ørsted" virava "rsted"). São a grafia real
 # de nomes nórdicos, turcos e poloneses — mesma família do "São Paulo" que motivou o fix.
+# A decisão 4 da spec do ticket mandava deixar SÓ o bloco latino aqui. Ela está errada, e
+# a verificação é de uma linha: sem os homoglifos cirílicos, `_fold("dados de Aсme Cоrp")`
+# (com с e о cirílicos) é `"dados de a me c rp"`, que NÃO contém "acme corp" — o disfarce
+# por homoglifo volta a passar, e a regressão que existe para isso fica vermelha.
+# O que estilhaçava o token em fragmento de 1-2 chars não eram estes mapeamentos (são
+# equivalências 1:1, o token sobrevive inteiro): eram as letras SEM forma ASCII, que o
+# `[^0-9a-z]` apagava. Essas saem pelo `_lost_info`, não daqui.
 _TRANSLIT = str.maketrans({
     "ø": "o", "æ": "ae", "œ": "oe", "ł": "l", "đ": "d", "ð": "d", "þ": "th",
     "ı": "i", "ħ": "h", "ß": "ss", "ŋ": "n", "ſ": "s",
-    # homoglifos cirílicos/gregos de uso comum em disfarce
+    # homoglifos cirílicos/gregos de uso comum em disfarce (equivalência 1:1 — a letra
+    # vira um ASCII único e o token inteiro sobrevive; não "estilhaça" como as sem forma)
     "а": "a", "е": "e", "о": "o", "с": "c", "р": "p", "х": "x", "у": "y", "к": "k",
     "α": "a", "ε": "e", "ο": "o", "ρ": "p", "τ": "t", "υ": "u", "κ": "k",
 })
 
 
+def _norm_pre(s: str) -> str:
+    """NFKD + tira acentos/invisíveis + casefold + translitera — ANTES de apagar não-ASCII.
+
+    Parada aqui (antes do `re.sub`) porque é aqui que dá pra distinguir "token perdeu
+    letra real" de "token virou ASCII limpo": se sobrar algum char >127 depois do
+    translit, é cirílico/CJK/grego que o `[^0-9a-z]` ia simplesmente APAGAR — e apagar
+    vira fragmento curto que casa com quase tudo. Ver `_lost_info`.
+    """
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(c for c in s if unicodedata.category(c) not in ("Mn", "Cf"))
+    return s.casefold().translate(_TRANSLIT)
+
+
 def _fold(s: str) -> str:
-    """Forma canônica para comparar: o bypass do guard era trivial sem isto.
+    """Forma canônica ASCII para comparar: NFKD + sem acentos/invisíveis + translit.
 
     Confirmado no review: com denylist ["Acme Corp"], passavam "Acme  Corp" (espaço
     duplo), "Acme\nCorp", "Acme-Corp", "Acme\u200bCorp" (zero-width) e "Acme\xa0Corp"
@@ -71,48 +92,104 @@ def _fold(s: str) -> str:
 
     Falso positivo aqui é seguro (recusa enviar); falso negativo vaza.
     """
-    s = unicodedata.normalize("NFKD", s)
-    s = "".join(c for c in s if unicodedata.category(c) not in ("Mn", "Cf"))
-    s = s.casefold().translate(_TRANSLIT)
-    return re.sub(r"[^0-9a-z]+", " ", s).strip()
+    return re.sub(r"[^0-9a-z]+", " ", _norm_pre(s)).strip()
+
+
+def _squash(s: str) -> str:
+    """Como _fold, mas SEM separador — para casar palavra colada por invisível.
+
+    Apagar um invisível JUNTA as palavras: "Acme\u200bCorp" vira "acmecorp", que não
+    contém "acme corp". Comparar também a forma colada fecha o bypass — mas colar contra
+    a QUERY inteira colava toda fronteira de palavra e dava +10pp de recusa falsa. Aqui o
+    squash só casa contra PALAVRAS inteiras da query (fronteira de palavra), não contra a
+    query colada — é a fronteira que evita o falso positivo, não o corte por comprimento
+    que o patch antigo usava (>=7 chars) e que deixava token curto vazar (C3).
+    """
+    return re.sub(r"[^0-9a-z]+", "", _norm_pre(s))
+
+
+def _lost_info(s: str) -> bool:
+    """A forma ASCII do token PERDEU informação?
+
+    True quando, depois de NFKD + translit, ainda resta algum char >127: é
+    cirílico/CJK/grego que `_fold` ia APAGAR, transformando o token num fragmento curto
+    que casa com quase tudo (`denylist=["Ямал"]` recusava "SaaS B2B em 2025"). Nesses
+    casos a forma ASCII é DESCARTADA e o token vai pelo caminho amplo (`_fold_amplo`).
+    """
+    return any(ord(c) > 127 for c in _norm_pre(s))
 
 
 def _fold_amplo(s: str) -> str:
-    """Fallback para token que não sobrevive ao fold ASCII (cirílico, CJK, grego).
+    """Fallback amplo: NFKC + sem invisíveis + casefold — PRESERVA não-ASCII.
 
-    REGRESSÃO que eu introduzi: `_fold("Сбербанк")` é string vazia, e o teste `if tf and
-    tf in q` PULAVA o token — o guard ficava estritamente mais fraco que o `token.lower()`
-    antigo, que bloqueava. Um guard que ignora em silêncio é pior que um guard ingênuo."""
+    É o caminho do token cirílico/CJK/grego: o que foi DESCARTADO da forma ASCII é
+    comparado AQUI, palavra a palavra, contra a query na mesma forma ampla. A regressão
+    que este guard já teve: `_fold("Сбербанк")==""` e o teste `if tf` PULAVA o token,
+    ficando estritamente mais fraco que o `token.lower()` antigo. Um guard que ignora em
+    silêncio é pior que um guard ingênuo.
+    """
     s = unicodedata.normalize("NFKC", s)
     s = "".join(c for c in s if unicodedata.category(c) not in ("Mn", "Cf"))
     return re.sub(r"\s+", " ", s.casefold()).strip()
 
 
-def _squash(s: str) -> str:
-    """Como _fold, mas sem separador NENHUM.
-
-    Necessário porque apagar um caractere invisível JUNTA as palavras: "Acme\u200bCorp"
-    vira "acmecorp", que não contém "acme corp". Remover o disfarce criava o bypass. Comparar
-    também a forma colada fecha isso — e um token colado só casa com texto colado, então
-    não inventa falso positivo entre palavras que apenas se tocam."""
-    return re.sub(r"[^0-9a-z]+", "", _fold(s))
-
-
 def check_no_leak(query: str, denylist: list[str]) -> None:
-    q, qs, qa = _fold(query), _squash(query), _fold_amplo(query)
+    """Recusa enviar `query` se ela contiver qualquer token da `denylist`.
+
+    Comparação ADITIVA (decisão 2): as formas ASCII dobrada, colada-com-fronteira e a
+    ampla são testadas TODAS para cada token; basta UMA casar para bloquear. O gate
+    antigo `not tf and ta and ta in qa` era o bug: token misto ("Сбербанк SA") tinha
+    `tf='sa'` (ASCII usável) e PULAVA o caminho amplo, deixando o pedaço não-latino sem
+    checagem nenhuma. Agora o caminho amplo é sempre avaliado quando o token tem parte
+    não-ASCII (independente do pedaço ASCII casar ou não).
+
+    Falso positivo é seguro (recusa enviar); falso negativo vaza. Na dúvida, bloquear.
+    """
+    qf, qa = _fold(query), _fold_amplo(query)
+    qwords = qf.split()      # fronteira de palavra para o squash
+    qsquash = _squash(query)  # query colada, para o token longo embutido num run maior
     for token in denylist:
-        tf, ts, ta = _fold(token), _squash(token), _fold_amplo(token)
-        # `_squash` só entra para token longo: colar a query inteira faz toda fronteira de
-        # palavra virar colisão, e a medição do review deu +10pp de recusa falsa para
-        # token de 4 chars (~0 para >=7). Recusa falsa é segura, mas inutiliza a ferramenta.
-        usa_squash = ts and len(ts) >= 7
-        if ((tf and tf in q)
-                or (usa_squash and ts in qs)
-                or (not tf and ta and ta in qa)):
+        tf, ta = _fold(token), _fold_amplo(token)
+        ascii_usable = bool(tf) and not _lost_info(token)
+        # (1) forma ASCII dobrada — só se o token não perdeu informação.
+        if ascii_usable and tf in qf:
             raise LeakBlocked(
                 f"query bloqueada: contém token sensível {token!r}. "
                 "Abstraia a query antes de enviar (no-leak)."
             )
+        # (2) forma colada. Duas comparações, com alcances deliberadamente diferentes:
+        #
+        #   (2a) IGUALDADE com uma palavra inteira da query, para QUALQUER comprimento.
+        #        É o que pega o join com invisível sem o corte por comprimento que
+        #        deixava token curto vazar (C3). Igualdade, e não `in`: `ts in w` casa
+        #        DENTRO da palavra, sem fronteira nenhuma — a denylist ["SA"] recusaria
+        #        "casa", que é exatamente a recusa falsa proibida pelo C4. A fronteira é
+        #        o ponto; sem ela o passo (2) vira o corte por comprimento outra vez, só
+        #        que implícito e invisível.
+        #
+        #   (2b) SUBSTRING na query inteira colada, só para token longo (>=7). Aqui a
+        #        colisão é improvável (medido no review: ~0 em >=7, +10pp em 4 chars) e
+        #        é o que pega o token embutido num run maior ("AcmeCorpLtda"), que a
+        #        igualdade sozinha perderia. Mantido do desenho anterior de propósito:
+        #        trocar `in` por `==` sem isto seria trocar um falso positivo por um
+        #        vazamento silencioso.
+        if ascii_usable:
+            ts = _squash(token)
+            if ts and (any(ts == w for w in qwords)
+                       or (len(ts) >= 7 and ts in qsquash)):
+                raise LeakBlocked(
+                    f"query bloqueada: contém token sensível {token!r}. "
+                    "Abstraia a query antes de enviar (no-leak)."
+                )
+        # (3) caminho amplo: cada PALAVRA não-ASCII do token, contra a query ampla.
+        # Sempre avaliado (aditivo) — fecha o buraco do token misto, cujo pedaço ASCII
+        # não cobre o pedaço cirílico/CJK/grego.
+        for w in ta.split():
+            if any(ord(c) > 127 for c in w) and w in qa:
+                raise LeakBlocked(
+                    f"query bloqueada: contém token sensível {token!r}. "
+                    "Abstraia a query antes de enviar (no-leak)."
+                )
 
 
 def tier_for(url: str) -> str:
