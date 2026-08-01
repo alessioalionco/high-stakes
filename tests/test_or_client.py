@@ -24,6 +24,9 @@ from pathlib import Path
 
 from high_stakes import or_client
 from high_stakes.or_client import BudgetExceeded, BudgetLedger, ORClient
+import urllib.request
+
+from high_stakes import http_client
 from high_stakes.http_client import RequestException, Session
 
 ROOT = Path(__file__).resolve().parents[1]  # raiz do repo/plugin
@@ -34,6 +37,8 @@ class Handler(BaseHTTPRequestHandler):
     """mode é de CLASSE: cada teste ajusta antes de chamar."""
     mode = "ok"
     hits = 0
+    trap_url = ""
+    trap_headers = None
 
     def log_message(self, *a):  # silencia o log do http.server
         pass
@@ -55,6 +60,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, body, {"Content-Type": "application/json"})
         if self.path == "/echo-headers":
             return self._send(200, json.dumps(dict(self.headers)).encode())
+        if self.path == "/redirect-para-armadilha":
+            return self._send(302, b"", {"Location": Handler.trap_url})
+        if self.path == "/armadilha":
+            Handler.trap_headers = dict(self.headers)
+            return self._send(200, b"peguei")
         if self.path == "/429":
             return self._send(429, b"slow down", {"Retry-After": "7"})
         if self.path == "/400":
@@ -69,6 +79,17 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/echo":
             return self._send(200, raw, {"Content-Type": "application/json"})
         Handler.hits += 1
+        if Handler.mode == "corta_no_meio":
+            # headers + corpo PARCIAL, depois derruba: a falha dominante numa chamada
+            # longa de streaming. Content-Length maior que o enviado força erro de leitura.
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Content-Length", "9999")
+            self.end_headers()
+            self.wfile.write(b'data: {"choices":[{"delta":{"content":"me')
+            self.wfile.flush()
+            self.close_connection = True
+            return
         if Handler.mode == "always_500":
             return self._send(500, b"upstream boom")
         sse = (
@@ -162,6 +183,42 @@ def main() -> int:
         case("Accept-Encoding: identity é explícito (urllib não descomprime)",
              r.json().get("Accept-Encoding") == "identity")
 
+        # ---- REGRESSÃO DE SEGURANÇA: a chave não pode viajar num redirect ----
+        # O handler padrão do urllib reenvia TODOS os headers ao destino do 3xx, inclusive
+        # Authorization — e o destino pode ser outro host. O `requests` remove auth
+        # cross-host; reimplementar sem essa trava vazava a chave para quem controlasse o
+        # redirect. PoC confirmado antes do fix: o 2º host recebeu o Bearer.
+        srv2, base2 = start_server()
+        try:
+            Handler.trap_url = f"{base2}/armadilha"
+            Handler.trap_headers = None
+            r = s.get(f"{base}/redirect-para-armadilha",
+                      headers={"Authorization": "Bearer sk-NAO-PODE-VAZAR"}, timeout=5)
+            case("REGRESSÃO: redirect NÃO é seguido — 3xx volta como resposta terminal",
+                 r.status_code == 302)
+            vazou = (Handler.trap_headers or {}).get("Authorization")
+            case(f"REGRESSÃO CRÍTICA: a chave NÃO chega ao destino do redirect"
+                 f"{' — VAZOU: ' + str(vazou) if vazou else ''}",
+                 Handler.trap_headers is None)
+        finally:
+            srv2.shutdown()
+
+        case("o cliente usa opener PRÓPRIO, não o global do processo",
+             Session._get_opener() is not urllib.request._opener)
+
+        # ---- REGRESSÃO: corpo remoto tem teto ----
+        case("existe teto por linha e por corpo (DoS por corpo sem newline)",
+             http_client.MAX_LINE_BYTES > 0 and http_client.MAX_BODY_BYTES > 0)
+
+        # ---- REGRESSÃO: prazo de PAREDE, não só timeout de socket ----
+        r = s.get(f"{base}/lines", timeout=5)
+        r._deadline = time.monotonic() - 1  # já vencido
+        try:
+            list(r.iter_lines())
+            case("REGRESSÃO: prazo de parede vencido interrompe a leitura", False)
+        except RequestException:
+            case("REGRESSÃO: prazo de parede vencido interrompe a leitura", True)
+
         # ---- integração: chat() completo contra o servidor ----
         or_client.OPENROUTER_BASE = f"{base}/api/v1"
         or_client.ORClient._sleep_backoff = staticmethod(lambda *a, **k: None)  # sem espera
@@ -199,6 +256,70 @@ def main() -> int:
         case("REGRESSÃO T5: instância nova herda o gasto (cap não reseta)",
              abs(led2b.spent - led2.spent) < 1e-9)
         Handler.mode = "ok"
+
+        # ---- REGRESSÃO: ledger ilegível FALHA FECHADO ----
+        # Tratar ledger corrompido como "gasto zero" devolvia o cap inteiro — o oposto do
+        # que o reserve-then-reconcile existe para garantir. Reproduzido no review:
+        # $54 gastos viravam $0 e o processo reservava de novo.
+        pc = tmp / "corr" / "cost-ledger.json"
+        pc.parent.mkdir(parents=True)
+        lc = BudgetLedger(cap_usd=10.0, ledger_path=pc)
+        lc.reserve(4.0); lc.reconcile(4.0, 4.0)
+        pc.write_text('{"spent_usd": 4.0, "cal')  # truncado no meio de um write
+        try:
+            BudgetLedger(cap_usd=10.0, ledger_path=pc)
+            case("REGRESSÃO: ledger truncado RECUSA dispatch (não devolve o cap)", False)
+        except or_client.LedgerCorrupted:
+            case("REGRESSÃO: ledger truncado RECUSA dispatch (não devolve o cap)", True)
+
+        pv = tmp / "vazio" / "cost-ledger.json"
+        pv.parent.mkdir(parents=True); pv.write_text("")
+        case("ledger AUSENTE ou vazio segue sendo run novo legítimo",
+             BudgetLedger(cap_usd=10.0, ledger_path=pv).spent == 0.0)
+
+        # ---- REGRESSÃO: o cap efetivo é o MENOR, não o maior ----
+        # cap_usd era escrito no ledger e nunca lido de volta. Reproduzido no review:
+        # instância com cap $5 bloqueava em $4; outra com cap $100 gastava $50 no mesmo run.
+        pm = tmp / "cap" / "cost-ledger.json"
+        pm.parent.mkdir(parents=True)
+        a5 = BudgetLedger(cap_usd=5.0, ledger_path=pm)
+        a5.reserve(4.0); a5.reconcile(4.0, 4.0)
+        b100 = BudgetLedger(cap_usd=100.0, ledger_path=pm)
+        try:
+            b100.reserve(50.0)
+            case("REGRESSÃO: cap maior NÃO sobrepõe o cap já gravado no run", False)
+        except BudgetExceeded:
+            case("REGRESSÃO: cap maior NÃO sobrepõe o cap já gravado no run", True)
+
+        # ---- REGRESSÃO: extra_body não pode furar a estimativa ----
+        led_x = BudgetLedger(cap_usd=10.0, persist=False)
+        cx = ORClient(ledger=led_x, api_key="k", outputs_dir=tmp / "x")
+        cx._catalog = {"test/model": {"pricing": {"prompt": "0.000001",
+                                                  "completion": "0.000002"}}}
+        for campo, valor in (("max_tokens", 200000), ("model", "caro/model")):
+            try:
+                cx.chat("test/model", [{"role": "user", "content": "oi"}], max_tokens=16,
+                        extra_body={campo: valor})
+                case(f"REGRESSÃO: extra_body['{campo}'] é REJEITADO (furaria o cap)", False)
+            except ValueError:
+                case(f"REGRESSÃO: extra_body['{campo}'] é REJEITADO (furaria o cap)",
+                     led_x.snapshot()["reserved_usd"] == 0.0)
+
+        # ---- REGRESSÃO: falha NO MEIO do stream re-entra no retry ----
+        Handler.mode = "corta_no_meio"; Handler.hits = 0
+        led_m = BudgetLedger(cap_usd=10.0, ledger_path=tmp / "mid" / "cost-ledger.json")
+        cm = ORClient(ledger=led_m, api_key="k", outputs_dir=tmp / "mid")
+        try:
+            cm.chat("test/model", [{"role": "user", "content": "oi"}], max_tokens=16)
+        except Exception:
+            pass
+        case("REGRESSÃO: queda no meio do stream é RETENTADA, não 1 tentativa de 4",
+             Handler.hits == or_client.MAX_RETRIES)
+        Handler.mode = "ok"
+
+        # ---- REGRESSÃO: o TTL da reserva cobre o pior caso de uma chamada ----
+        case("REGRESSÃO: TTL > MAX_RETRIES × timeout máximo (não poda reserva em voo)",
+             or_client.RESERVATION_TTL_S >= or_client.MAX_RETRIES * 1200)
 
         # ---- T4: cap cross-processo ----
         p4 = tmp / "run4" / "cost-ledger.json"

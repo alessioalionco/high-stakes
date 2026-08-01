@@ -64,6 +64,10 @@ class BudgetExceeded(RuntimeError):
     """Levantada ANTES do dispatch quando a reserva estouraria o cap."""
 
 
+class LedgerCorrupted(RuntimeError):
+    """Ledger existe e não parseia: gasto desconhecido -> recusa dispatch (fail-closed)."""
+
+
 class SchemaInvalid(ValueError):
     """JSON da célula não valida contra o schema esperado (estado terminal)."""
 
@@ -86,7 +90,12 @@ def load_api_key(env_path: Path | None = None) -> str:
     raise RuntimeError(f"OPENROUTER_API_KEY não achado em {env_path}")
 
 
-RESERVATION_TTL_S = 3600  # reserva órfã (processo morto) some depois disto
+_WARNED_NO_FLOCK = False
+
+# A reserva de uma chamada EM VOO não pode expirar. O pior caso é MAX_RETRIES tentativas
+# de `timeout` cada (4 × 1200s = 4800s no default do config), então um TTL de 1h podava
+# reserva viva e apagava a do outro processo — dois processos reservavam o mesmo dinheiro.
+RESERVATION_TTL_S = 4 * 1200 * 2  # 2h40: teto do pior caso, com folga
 
 
 @contextlib.contextmanager
@@ -97,6 +106,11 @@ def _file_lock(path: Path):
     aviso explícito, não falha silenciosa — o motor roda em macOS/Linux.
     """
     if fcntl is None:  # pragma: no cover
+        global _WARNED_NO_FLOCK
+        if not _WARNED_NO_FLOCK:
+            _WARNED_NO_FLOCK = True
+            print("[ledger] AVISO: fcntl indisponível nesta plataforma — o cap NÃO vale "
+                  "entre processos. Rode um processo por vez.")
         yield
         return
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -147,10 +161,17 @@ class BudgetLedger:
         try:
             raw = json.loads(self._ledger_path.read_text())
         except (json.JSONDecodeError, OSError) as e:
-            if self._ledger_path.exists():
-                print(f"[ledger] AVISO: ledger corrompido em {self._ledger_path} "
-                      f"({type(e).__name__}) — começando gasto em 0.")
-            raw = {}
+            if self._ledger_path.exists() and self._ledger_path.stat().st_size > 0:
+                # FAIL CLOSED. Tratar ledger ilegível como "gasto zero" devolvia o cap
+                # inteiro — é exatamente o oposto do que o reserve-then-reconcile existe
+                # para garantir. Um arquivo que existe e não parseia é estado suspeito,
+                # não estado inicial.
+                raise LedgerCorrupted(
+                    f"ledger ilegível em {self._ledger_path} ({type(e).__name__}: {e}). "
+                    "O gasto acumulado é desconhecido, então nenhum dispatch é seguro. "
+                    "Inspecione o arquivo e, se o gasto for aceitável, apague-o "
+                    "explicitamente para recomeçar do zero.") from e
+            raw = {}  # ausente ou vazio = run novo, legítimo
         except ValueError:
             raw = {}
         try:  # ledger pré-fix pode ter spend negativo (sentinela -1/-1 do catálogo)
@@ -169,7 +190,26 @@ class BudgetLedger:
                 continue
             if usd > 0 and now - ts < RESERVATION_TTL_S:  # descarta órfã de processo morto
                 res[k] = {"usd": usd, "ts": ts}
-        return {"spent_usd": spent, "calls": calls, "reservations": res}
+        try:
+            disk_cap = float(raw.get("cap_usd")) if raw.get("cap_usd") is not None else None
+        except (TypeError, ValueError):
+            disk_cap = None
+        return {"spent_usd": spent, "calls": calls, "reservations": res,
+                "cap_usd": disk_cap}
+
+    def _effective_cap(self, disk: dict) -> float:
+        """O MENOR entre o cap desta instância e o que já está no ledger.
+
+        O cap era escrito no arquivo e nunca lido de volta: dois processos com caps
+        diferentes no mesmo run davam cap efetivo = o MAIOR. Quem abriu com $5 achava que
+        o teto era $5 enquanto o outro gastava $50 no mesmo ledger."""
+        dc = disk.get("cap_usd")
+        if dc is None or dc <= 0:
+            return self.cap_usd
+        if dc != self.cap_usd:
+            print(f"[ledger] AVISO: este run já tem cap ${dc:.2f} no ledger e esta "
+                  f"instância pediu ${self.cap_usd:.2f} — vale o MENOR.")
+        return min(self.cap_usd, dc)
 
     def _write_disk(self, spent: float, calls: int, reservations: dict) -> None:
         payload = json.dumps({
@@ -213,7 +253,7 @@ class BudgetLedger:
                     raise BudgetExceeded(
                         f"reserva ${est_usd:.4f} estouraria o cap "
                         f"(spent ${self._spent:.4f} + reserved ${self._reserved:.4f} "
-                        f"+ est = ${projected:.4f} > ${self.cap_usd:.2f})"
+                        f"+ est = ${projected:.4f} > ${cap:.2f})"
                     )
                 self._reserved += est_usd
                 return
@@ -222,8 +262,9 @@ class BudgetLedger:
                 others = sum(v["usd"] for k, v in d["reservations"].items()
                              if k != self._owner)
                 self._spent, self._calls = d["spent_usd"], d["calls"]
+                cap = self._effective_cap(d)
                 projected = d["spent_usd"] + others + self._reserved + est_usd
-                if projected > self.cap_usd:
+                if projected > cap:
                     raise BudgetExceeded(
                         f"reserva ${est_usd:.4f} estouraria o cap "
                         f"(spent ${d['spent_usd']:.4f} + reserved ${self._reserved:.4f} "
@@ -385,6 +426,18 @@ class ORClient:
 
         Cap reserve-then-reconcile: reserva o teto estimado ANTES de mandar.
         """
+        # extra_body é aplicado DEPOIS, então deixá-lo trocar `model` ou `max_tokens`
+        # significaria reservar o preço de uma chamada e disparar outra. O cap seria
+        # furado por fator arbitrário, sem erro. cells.py encaminha `request` vindo da
+        # tarefa, então isto é alcançável por dado comum, não só por malícia.
+        _RESERVADAS = {"model", "messages", "max_tokens", "stream", "usage"}
+        if extra_body:
+            invasoras = _RESERVADAS & set(extra_body)
+            if invasoras:
+                raise ValueError(
+                    f"extra_body não pode conter {sorted(invasoras)}: esses campos entram "
+                    "na estimativa que reserva o orçamento ANTES do dispatch. Passe-os "
+                    "pelos parâmetros próprios de chat().")
         est = self._estimate(model, messages, max_tokens)
         self.ledger.reserve(est)  # pode levantar BudgetExceeded -> não dispara
 
@@ -476,6 +529,14 @@ class ORClient:
 
             try:
                 return self._consume_stream(resp)
+            except (RequestException, OSError) as exc:
+                # Transporte caiu com o stream já aberto (RST, timeout de leitura,
+                # IncompleteRead). É a falha DOMINANTE numa chamada de 300-1200s, e antes
+                # escapava do loop: 1 tentativa de MAX_RETRIES, cobrada como fracasso.
+                last_exc = exc
+                resp.close()
+                self._sleep_backoff(attempt, None)
+                continue
             except ORClient._Retriable as exc:
                 # erro-em-corpo-200 com code transiente (ex: 502 'connection lost')
                 last_exc = exc
@@ -492,6 +553,7 @@ class ORClient:
         OpenRouter embute erro de upstream num corpo 200 (campo `error` com
         `code`). Classifica: code 429/5xx -> _Retriable; senão terminal.
         """
+        saw_done = False
         content_parts: list[str] = []
         usage: dict = {}
         provider: str | None = None
@@ -508,6 +570,7 @@ class ORClient:
                 continue
             data_str = line[6:].strip()
             if data_str == "[DONE]":
+                saw_done = True
                 break
             try:
                 obj = json.loads(data_str)
@@ -534,6 +597,15 @@ class ORClient:
                     content_parts.append(delta["content"])
                 for ann in delta.get("annotations") or []:
                     annotations.append(ann)
+        # Stream que acaba SEM o [DONE] foi truncado — conexão caiu, provider morreu no
+        # meio. `readline()` devolve EOF em vez de levantar, então a resposta parcial
+        # passava como completa: texto cortado no meio da palavra virava célula "ok" e
+        # ninguém via. Truncamento é transiente -> volta para o retry.
+        if not saw_done:
+            raise ORClient._Retriable(
+                f"stream truncado: terminou sem [DONE] após {len(content_parts)} chunks "
+                "(conexão caiu no meio da resposta)")
+
         message = {"content": "".join(content_parts)}
         if annotations:
             message["annotations"] = annotations
