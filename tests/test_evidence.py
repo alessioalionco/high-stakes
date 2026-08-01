@@ -128,6 +128,51 @@ def main() -> int:
             case("REGRESSÃO: token curto não gera recusa falsa (squash só p/ token longo)",
                  False)
 
+        # ================= CONTRATO DA NORMALIZAÇÃO (red tests) =================
+        # Escritos ANTES da reescrita. Três patches pontuais pioraram este guard; estes
+        # quatro casos são o contrato que a reescrita tem de satisfazer sem regredir
+        # nenhum dos casos acima.
+
+        # C1 — token não-latino NUNCA vira fragmento ASCII curto.
+        # Hoje _fold('Ямал')=='a', então essa denylist recusa quase toda query.
+        try:
+            check_no_leak("qual o NRR de SaaS B2B em 2025", ["Ямал"])
+            case("C1: token cirílico não vira fragmento que recusa query inocente", True)
+        except LeakBlocked:
+            case("C1: token cirílico não vira fragmento que recusa query inocente", False)
+        try:
+            check_no_leak("what is the average churn", ["Банк"])
+            case("C1b: token cirílico curto não recusa query inocente", True)
+        except LeakBlocked:
+            case("C1b: token cirílico curto não recusa query inocente", False)
+
+        # C2 — token MISTO: o pedaço não-latino tem de ser checado.
+        # Hoje o fallback é gated em `not tf`, e "Сбербанк SA" tem tf='sa' -> pula.
+        for tok, q, desc in [("Сбербанк SA", "receita do Сбербанк", "cirílico + sufixo"),
+                             ("北京字节跳动 Ltd", "dados de 北京字节跳动", "CJK + sufixo")]:
+            try:
+                check_no_leak(q, [tok])
+                case(f"C2: token misto ({desc}) bloqueia pelo pedaço não-latino", False)
+            except LeakBlocked:
+                case(f"C2: token misto ({desc}) bloqueia pelo pedaço não-latino", True)
+
+        # C3 — token CURTO ainda tem de pegar o join com caractere invisível.
+        # Hoje o squash só vale para >=7 chars, então "Big Co" volta a vazar.
+        for tok, q in [("Big Co", "receita da Big\u200bCo em 2025"),
+                       ("Acme SA", "o caso Acme\u200bSA")]:
+            try:
+                check_no_leak(q, [tok])
+                case(f"C3: token curto {tok!r} pega o join com zero-width", False)
+            except LeakBlocked:
+                case(f"C3: token curto {tok!r} pega o join com zero-width", True)
+
+        # C4 — e sem reintroduzir recusa falsa por colagem.
+        try:
+            check_no_leak("qual o custo de aquisicao", ["oc"])
+            case("C4: token curto não recusa texto inocente por colagem", True)
+        except LeakBlocked:
+            case("C4: token curto não recusa texto inocente por colagem", False)
+
         # ---- REGRESSÃO: omitir a denylist não pode ser o caminho permissivo ----
         spy = SpyClient()
         try:
