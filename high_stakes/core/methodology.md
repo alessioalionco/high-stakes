@@ -138,9 +138,9 @@ conflita-com}`. **Travas:**
 - **Bruto + síntese com a linha:** síntese SOBRE a evidência OK, **sobre o artefato/decisão NÃO**; toda afirmação linka a primária (atravessável) + tag; painel julga contra as primárias; **grounding só conta a primária**.
 - **Conflitante = ambos + flag** (divergência de evidência é sinal; nunca escolher em silêncio).
 - **Hierarquia de confiança** (painel pesa por ela): primária/peer-reviewed > analista/estatística oficial > imprensa > vendor/sponsored > blog/fórum. **Flag forte** em tier-baixo/contestado; **tier-baixo NÃO aterra número**.
-- **No-leak default + ask-gate:** query externa **abstrai** (nunca nosso número); pra mandar trecho sensível, **mostro o que vou enviar e peço OK**; sensível → só provider no-retention; fatos privados ficam internos. *(O gate de egress é formalizado em `core/sections/interactive-gates.md`.)*
+- **No-leak default + ask-gate:** query externa **abstrai** (nunca nosso número); pra mandar trecho sensível, **mostro o que vou enviar e peço OK**; fatos privados ficam internos. *(O gate de egress é formalizado em `core/sections/interactive-gates.md`.)* ⚠️ **"sensível → só provider no-retention" saiu daqui:** é promessa sem mecanismo — o motor não consulta a política de retenção de provedor nenhum. Está no roadmap do `execution.md`. E não há filtro de conteúdo na saída: existiu uma denylist de termos, foi **removida** de propósito (o porquê está no cabeçalho de `high_stakes/evidence.py`). A trava que resta é humana, e é o Gate B.
 - **Agenda = 3 geradores (v1.7):** forward (board pede no pre-pass) + **backward (estrutura da decisão/claims — o que é logicamente necessário saber, independente do que o board pediu)** + benchmark do orquestrador.
-- **Loop de auto-verificação de fontes (v1.7):** o LLM fabrica fontes que parecem reais (link morto / que não sustenta o claim) e fica confiante. A evidência **se auto-verifica como loop**: abre cada fonte, confirma que sustenta o claim, descarta fabricada/morta, busca substituta, só para quando tudo confere. Fonte não-verificada NÃO entra (ou entra flagada). É o kill-switch do Órgão 2 estendido à evidência ("checking means evidence, not confidence").
+- **Loop de auto-verificação de fontes (v1.7) — ⚠️ NÃO CONSTRUÍDO:** o LLM fabrica fontes que parecem reais (link morto / que não sustenta o claim) e fica confiante. O desenho: a evidência se auto-verifica como loop — abre cada fonte, confirma que sustenta o claim, descarta fabricada/morta, busca substituta, só para quando tudo confere. **Nada disso roda.** O que o motor faz hoje é COLETAR a citação e classificar o domínio por tier (`evidence.py`); ninguém abre a fonte nem confere se ela sustenta o claim. Enquanto não existir, a conferência é sua — e uma citação de tier alto continua podendo ser inventada. Está no roadmap do `execution.md`.
 - **Crítico de completude (checklist):** depois do pack, antes do painel — checa os **3 geradores** sem resposta → **gaps a você** (anexa/aceita), não auto-preenche. Generalista = backstop no run.
 - **TTL por natureza no loop:** meia-vida por natureza (m² dias-semanas · notícia curtíssima · benchmark ~1ano · acadêmica anos); re-run só re-busca o que venceu (caching por-item).
 - **Regra de NOVIDADE (v2, palavras do decisor):** research completa dispara quando "o tema é novo
@@ -267,7 +267,7 @@ re-gravado.
 
 ### 3b. A matriz (cobertura + papéis standing) × M — CEGA, sem rounds
 - **Lentes de cobertura** (cada persona = um EIXO, não um nome famoso; 3→5→7 por complexidade) **+ 3 papéis standing**: **generalista ×M** (anti-groupthink; o eixo esquecido; auto-add, NÃO mora no pool) · **anti-tese ×1** (ataca a premissa) · **bull/bear no eixo-crux** (par no mesmo eixo = alto spread). Ver §3a pra a lógica de formação.
-- **Célula = (persona × modelo), 1 chamada PARALELA ISOLADA** (multi-agente — o orquestrador garante o contexto limpo; ninguém se lê; **sem rounds**). A divergência é o PRODUTO. Aposentar o "1 prompt/modelo com todas as personas" (contamina → mata a divergência-de-persona). *(A capacidade "chamadas paralelas isoladas" é exigida do harness — ver `core/execution.md`.)*
+- **Célula = (persona × modelo), 1 chamada PARALELA ISOLADA** (multi-agente — o orquestrador garante o contexto limpo; ninguém se lê; **sem rounds**). ✅ **Verificado no código, e por CONSTRUÇÃO, não por gate:** `build_quick_tasks` monta a mensagem de cada célula a partir de três entradas e nada mais — o material (prefixo byte-idêntico), o sufixo da persona e o ask do arquétipo. Não existe caminho por onde a resposta de uma célula entre no prompt de outra; o único append é o retry de formato, que devolve à célula a resposta DELA mesma. Ressalva honesta: `ask_builder` e `parse` são funções passadas de fora, e **nenhum teste trava esta invariante** — quem amanhã adicionar um "round 2" que realimenta saídas não vai ver nada ficar vermelho. A divergência é o PRODUTO. Aposentar o "1 prompt/modelo com todas as personas" (contamina → mata a divergência-de-persona). *(A capacidade "chamadas paralelas isoladas" é exigida do harness — ver `core/execution.md`.)*
 - Preset único: matriz cheia (ver §3a-bis; `value` extinto).
 
 **Schema de output de cada célula — taxonomia de 6 ações + scores** (cada tipo vira uma AÇÃO; tudo é
@@ -308,7 +308,15 @@ como produto principal (verificar contra o material antes do dossiê), veredito 
 experimento) — por isso ele nunca decide veredito sozinho. Em uso, o por-item corrigiu um
 erro do próprio Chairman num dossiê publicado.
 
-### 3e. Brand-blinding real na visão-de-julgamento [M2]
+### 3e. Brand-blinding na visão-de-julgamento — procedimento, não trava [M2]
+
+> ⚠️ **Leia isto antes do resto da seção.** O que está descrito abaixo é o
+> **procedimento** que a visão-de-julgamento deve seguir. **Nada no código o impõe.** Não
+> existe `label_to_model` em Python, não existe verificação de que a marca ficou fora do
+> contexto, e o passo do Chairman/refutador não é código — é contrato, executado por quem
+> orquestra. Se a marca vazar pro contexto de julgamento, o run segue e ninguém avisa.
+> Chamar isto de blinding "real" era forte demais: é blinding **por disciplina**. Está no
+> roadmap do `execution.md`.
 > Roubado do llm-council (Karpathy) + pesquisa de self-preference (modelos inflam próprio/mesma-família
 > −38%/+90%). **Explicitar ≠ "cego":** aqui "cego" quer dizer **sem rounds e sem marca**, não sem
 > instrução. O firewall da crença-alvo (§3a) é uma coisa; o brand-blinding é outra.

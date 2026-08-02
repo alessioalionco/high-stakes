@@ -93,6 +93,50 @@ def main() -> int:
             case("o pin que VEM na instalação carrega e é avaliável sem crash",
                  pin_expired(load_pin(hs_config.pin_path())) is True),
         ]
+        # ATENÇÃO a quem adicionar teste daqui pra baixo: `results` acima é uma LISTA
+        # LITERAL. Um `case(...)` solto depois dela IMPRIME PASS/FAIL e não entra na
+        # contagem nem no exit code — a suíte fica verde com o teste vermelho. Use
+        # `results.append(case(...))`, como abaixo. (Foi exatamente assim que a checagem
+        # de isolamento passou a reportar 19/19 com um FAIL na tela.)
+
+        # ---- ISOLAMENTO ENTRE JUÍZES: a invariante que o produto vende ----
+        # O painel adversarial só vale se ninguém se lê. Se a resposta de um conselheiro
+        # entra no prompt de outro, o consenso vira eco e a confirmação é FALSA — e isso é
+        # pior que um bug comum, porque o dossiê sai bonito e mais confiante, não quebrado.
+        # Hoje o isolamento é verdade por CONSTRUÇÃO (a mensagem é montada só de material +
+        # persona + ask), mas nada travava a invariante: quem adicionasse um "round 2"
+        # realimentando saídas não veria nada ficar vermelho. Isto trava.
+        RESPOSTA_DE_OUTRO = "VEREDITO DO UNIT ECONOMIST: o NRR não sustenta a tese."
+        marcadores = ["DECK XYZ 123"]  # o material compartilhado é o ÚNICO texto comum
+        contaminadas = [t["cell_id"] for t in tasks
+                        if RESPOSTA_DE_OUTRO in t["messages"][1]["content"]]
+        results.append(case("isolamento: nenhuma célula carrega a resposta de outra", not contaminadas))
+
+        # e a prova positiva de que o teste sabe detectar: a MESMA checagem, contra uma
+        # tarefa deliberadamente contaminada, tem de acusar. Sem isto o teste acima passa
+        # trivialmente e vira decorativo (foi assim que o teste de cobrança de retry passou
+        # por meses satisfeito por outro caminho).
+        envenenada = dict(tasks[0])
+        envenenada["messages"] = [tasks[0]["messages"][0],
+                                  {"role": "user",
+                                   "content": tasks[0]["messages"][1]["content"]
+                                   + "\n\n" + RESPOSTA_DE_OUTRO}]
+        results.append(case("isolamento: a checagem ACUSA quando há contaminação (não é decorativa)",
+             RESPOSTA_DE_OUTRO in envenenada["messages"][1]["content"]))
+
+        # o conteúdo de uma célula, tirando o material compartilhado e a persona dela, não
+        # pode aparecer em outra: é o que garante que a divergência é do modelo/persona e
+        # não de contexto herdado.
+        sufixos = {}
+        for t in tasks:
+            corpo = t["messages"][1]["content"][len(shared):]
+            sufixos[t["cell_id"]] = corpo
+        vazou = [(a, b) for a, ca in sufixos.items() for b, cb in sufixos.items()
+                 if a != b and sufixos[a] != sufixos[b] and ca in cb]
+        results.append(case("isolamento: o sufixo de uma célula não está contido no de outra", not vazou))
+        results.append(case("isolamento: o único texto comum entre células é o material compartilhado",
+             all(m in t["messages"][1]["content"] for t in tasks for m in marcadores)))
+
         print(f"{sum(results)}/{len(results)} testes ok")
         return 0 if all(results) else 1
     finally:

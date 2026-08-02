@@ -92,8 +92,12 @@ decididos POR DADO (experimento de assentos; ver a instância) — não por gost
   qualquer chamada paga. Acima do cap ($15 default) → parar e perguntar; abaixo → informar e, com
   o GO, seguir sem novas paradas.
 - **Egress:** default = query externa ABSTRAI (nunca número/trecho sensível); pra enviar trecho
-  sensível, mostrar exatamente o que sai e pedir OK; sensível → só provider no-retention. Fatos
-  privados ficam internos (células via API, nunca em busca externa).
+  sensível, mostrar exatamente o que sai e pedir OK. Fatos privados ficam internos (células
+  via API, nunca em busca externa).
+  ⚠️ **Este gate é a ÚNICA trava de egress que existe** — e ela é humana. Não há filtro de
+  conteúdo no código (a denylist que existia foi removida; ver o cabeçalho de
+  `high_stakes/evidence.py`), e **roteamento no-retention não existe**: o motor não consulta
+  a política de retenção de provedor nenhum. Se você mostrar e o humano der OK, sai.
 
 ## Cascata de invalidação
 Com 2 gates, a cascata opera dentro do Gate B: uma edição re-deriva os blocos afetados e o gate é
