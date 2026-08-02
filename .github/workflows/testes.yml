@@ -57,3 +57,8 @@ jobs:
             fi
           done
           exit $falhou
+
+      - name: os números do README batem com a realidade
+        # Fica fora da suíte porque rodar as suítes de dentro de uma suíte recursa.
+        # Já esteve errado duas vezes; é a primeira afirmação verificável do repo.
+        run: python tools/check-readme-numbers.py
