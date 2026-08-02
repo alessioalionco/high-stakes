@@ -25,8 +25,21 @@ fi
 # Resolve symlinks antes do dirname: `ln -s .../bin/high-stakes ~/.local/bin/high-stakes`
 # é a forma padrão de pôr um launcher no PATH, e sem desreferenciar o dirname apontaria
 # para ~/.local/bin — reproduzindo o ModuleNotFoundError que este script existe para matar.
+#
+# O laço TEM cap de iteração: um ciclo de symlink (a -> b -> a) fazia ele rodar para
+# sempre, e o usuário via o comando pendurado sem uma linha de saída — pior que um erro,
+# porque não há o que reportar nem o que procurar. 40 é o mesmo teto que o kernel usa
+# para resolução de link; cadeia legítima nunca chega perto.
 SRC="$0"
+SALTOS=0
 while [ -L "$SRC" ]; do
+    SALTOS=$((SALTOS + 1))
+    if [ "$SALTOS" -gt 40 ]; then
+        echo "high-stakes: cadeia de symlinks longa demais a partir de '$0'" >&2
+        echo "  (mais de 40 saltos — provavelmente um ciclo: a -> b -> a)." >&2
+        echo "  Rode 'ls -l' no caminho acima, ou chame o script pelo caminho real." >&2
+        exit 2
+    fi
     LINK=$(readlink "$SRC")
     case "$LINK" in
         /*) SRC="$LINK" ;;

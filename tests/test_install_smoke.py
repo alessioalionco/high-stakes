@@ -96,6 +96,27 @@ def main() -> int:
         case("REGRESSÃO: o launcher funciona invocado por SYMLINK",
              r_link.returncode == 0 and Path(r_link.stdout.strip()).is_dir(),
              r_link.stderr[-200:])
+        # REGRESSÃO: o laço que desreferencia symlink não tinha CAP de iteração. Um ciclo
+        # (a -> b -> a) fazia ele rodar para sempre e o usuário via o comando PENDURADO,
+        # sem uma linha de saída — pior que erro, porque não há o que reportar nem o que
+        # procurar. Aqui o ciclo é alimentado direto no laço porque, invocado como `$0`,
+        # o próprio kernel recusa o exec antes (ELOOP): o caminho realmente alcançável é
+        # um link intermediário que este laço constrói e o kernel nunca percorreu.
+        linhas = Path(LAUNCHER).read_text().splitlines()
+        ini = next(i for i, l in enumerate(linhas) if l.startswith("SALTOS="))
+        fim = next(i for i, l in enumerate(linhas) if i > ini and l == "done")
+        laco = "\n".join(linhas[ini:fim + 1])
+        ciclo_a, ciclo_b = tmp / "ciclo_a", tmp / "ciclo_b"
+        os.symlink(ciclo_b, ciclo_a)
+        os.symlink(ciclo_a, ciclo_b)
+        script = tmp / "so_o_laco.sh"
+        script.write_text(f'set -eu\nSRC="{ciclo_a}"\n{laco}\necho "saiu: $SRC"\n')
+        r_ciclo = subprocess.run(["sh", str(script)], cwd=tmp, capture_output=True,
+                                 text=True, timeout=20)
+        case("REGRESSÃO: ciclo de symlink PARA com erro, não trava para sempre",
+             r_ciclo.returncode != 0 and "symlinks" in r_ciclo.stderr.lower(),
+             (r_ciclo.stderr or r_ciclo.stdout)[-200:])
+
         r_nu = subprocess.run([sys.executable, "-m", "high_stakes.paths", "core"],
                               cwd=tmp, env=env, capture_output=True, text=True)
         case("REGRESSÃO: `python3 -m high_stakes.X` SEM PYTHONPATH falha — é por isso "
