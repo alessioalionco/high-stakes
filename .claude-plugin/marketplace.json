@@ -1,0 +1,28 @@
+{
+  "name": "high-stakes",
+  "description": "Motor de rigor para decisões caras de refazer: painel adversarial cego, refutação do próprio consenso, e citações verificadas por código.",
+  "owner": {
+    "name": "Alessio Alionco",
+    "url": "https://github.com/alessioalionco"
+  },
+  "plugins": [
+    {
+      "name": "high-stakes",
+      "source": "./",
+      "description": "Motor de rigor para decisões de alto risco e ambíguas: refina o pedido, roda um painel adversarial cego (personas × modelos de famílias diferentes), refuta o consenso e devolve um dossiê com quotes verificadas por código.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Alessio Alionco"
+      },
+      "homepage": "https://github.com/alessioalionco/high-stakes",
+      "repository": "https://github.com/alessioalionco/high-stakes",
+      "category": "productivity",
+      "keywords": [
+        "decision-making",
+        "adversarial-review",
+        "multi-model",
+        "citation-verification"
+      ]
+    }
+  ]
+}

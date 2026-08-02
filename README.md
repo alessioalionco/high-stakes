@@ -45,8 +45,11 @@ Serve se você tem, ao mesmo tempo:
 
 ```
 /plugin marketplace add alessioalionco/high-stakes
-/plugin install high-stakes
+/plugin install high-stakes@high-stakes
 ```
+
+O `@high-stakes` do segundo comando é o nome do marketplace, não repetição: o primeiro
+comando registra o catálogo, o segundo instala o plugin dele.
 
 É isso. **Zero dependências** — o motor usa só a biblioteca padrão do Python (3.11+).
 Não existe `pip install` neste fluxo, de propósito: uma dependência faltando falharia
@@ -166,7 +169,7 @@ for t in tests/test_*.py; do python3 -m "tests.$(basename "$t" .py)" || exit 1; 
 
 ## Estado
 
-**296 testes em 11 suítes — todos os 12 módulos com rede própria.** O que está coberto: o
+**304 testes em 11 suítes — todos os 12 módulos com rede própria.** O que está coberto: o
 caminho do dinheiro (teto por run, cobrança conservadora em falha pós-disparo, número
 não-finito vindo do provedor não desliga o teto), o dispatcher paralelo (célula que falha
 não some, id duplicado barrado antes do gasto, resume travado por hash de input,

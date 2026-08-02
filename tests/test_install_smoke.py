@@ -117,6 +117,44 @@ def main() -> int:
              r_ciclo.returncode != 0 and "symlinks" in r_ciclo.stderr.lower(),
              (r_ciclo.stderr or r_ciclo.stdout)[-200:])
 
+        # ---- o PRIMEIRO comando que o visitante roda tem de existir ----
+        # O README mandava `/plugin marketplace add`, e só havia `plugin.json`. Sem
+        # `marketplace.json` esse comando falha: a primeira coisa que alguém faz depois de
+        # ler a landing page é bater num erro. Schema conferido contra o marketplace
+        # oficial em disco e contra a doc: obrigatórios são `name`, `owner` e `plugins[]`;
+        # cada plugin exige `name` e `source`; `"./"` é a raiz do repo (o caso daqui).
+        import json as _json
+        mkt_p = ROOT / ".claude-plugin" / "marketplace.json"
+        case("o marketplace.json existe (sem ele, `/plugin marketplace add` falha)",
+             mkt_p.exists())
+        if mkt_p.exists():
+            mkt = _json.loads(mkt_p.read_text())
+            plug = _json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text())
+            faltando = [c for c in ("name", "owner", "plugins") if c not in mkt]
+            case("marketplace.json tem os campos obrigatórios", not faltando,
+                 f"falta: {faltando}")
+            case("owner.name presente (obrigatório)", bool(mkt.get("owner", {}).get("name")))
+            entradas = mkt.get("plugins") or []
+            case("há ao menos um plugin listado", bool(entradas))
+            if entradas:
+                e0 = entradas[0]
+                case("a entrada do plugin tem name e source",
+                     "name" in e0 and "source" in e0)
+                # o plugin É a raiz deste repo — se alguém mudar para um subdiretório sem
+                # mover os arquivos, o install baixa um plugin vazio e não avisa.
+                case("source aponta para a raiz do repo",
+                     e0.get("source") in ("./", "."), f"source={e0.get('source')!r}")
+                case("REGRESSÃO: name e version não divergem do plugin.json",
+                     e0.get("name") == plug.get("name")
+                     and e0.get("version") == plug.get("version"),
+                     f"marketplace={e0.get('name')}/{e0.get('version')} "
+                     f"plugin={plug.get('name')}/{plug.get('version')}")
+                # e o README tem de mandar o comando que REALMENTE instala isto
+                readme_txt = (ROOT / "README.md").read_text(encoding="utf-8")
+                esperado = f"/plugin install {e0.get('name')}@{mkt.get('name')}"
+                case("o comando de instalação do README bate com o manifesto",
+                     esperado in readme_txt, f"esperava '{esperado}'")
+
         r_nu = subprocess.run([sys.executable, "-m", "high_stakes.paths", "core"],
                               cwd=tmp, env=env, capture_output=True, text=True)
         case("REGRESSÃO: `python3 -m high_stakes.X` SEM PYTHONPATH falha — é por isso "
