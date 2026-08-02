@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""test_evidence.py — suíte executável do no-leak do evidence (convenção deste projeto).
-
-Por que existe (T6): o no-leak é a trava que impede material sensível de sair pra um
-provider externo. Ele já funcionava — mas SEM teste, e é exatamente a classe de código
-onde a falha é silenciosa: se alguém reordenar a checagem pra depois do dispatch, ou se a
-denylist chegar vazia por misconfiguração, nada quebra, nada avisa, e o material já foi.
+"""test_evidence.py — suíte executável do evidence (convenção deste projeto).
 
 O que se trava aqui:
-  - a recusa acontece ANTES de qualquer chamada (espião conta dispatches: tem de ser 0);
-  - `denylist=[]` é misconfiguração e falha FECHADA (≠ `None`, que é "público de propósito");
-  - a chave de cache inclui a denylist — endurecer a denylist não pode ser burlado por
-    cache velho;
-  - `leak_suspect` é RE-derivado com a blocklist ATUAL ao ler do cache.
+  - `load_reuse` não lê fora do `base_dir` — nem por `..`, nem por caminho absoluto,
+    nem por SYMLINK de arquivo. Este é o caminho com adversário de verdade: o material
+    reusado entra no prefixo de TODAS as células pagas e vai ao provedor externo;
+  - a blocklist de DOMÍNIO na resposta marca `leak_suspect` (nunca silencioso), e a
+    marca é RE-derivada com a blocklist ATUAL ao ler do cache — cache adulterado ou
+    antigo dizendo "limpo" não passa;
+  - cache por ask: mesma política não re-billa, política nova invalida e re-busca.
+
+Não há mais teste de no-leak de egress: o guard foi REMOVIDO. O porquê está no
+cabeçalho de `high_stakes/evidence.py` — não havia adversário nesse caminho, e o
+Gate B (humano vendo o que sai) é a trava que ficou.
 """
 import json
 import shutil
@@ -19,13 +20,13 @@ import sys
 import tempfile
 from pathlib import Path
 
-from high_stakes.evidence import (LeakBlocked, _cache_filename, body_leak_suspect,
-                      check_no_leak, is_blocked_domain, load_reuse, research,
-                              run_asks, tier_for)
+from high_stakes.evidence import (_cache_filename, body_leak_suspect,
+                                  is_blocked_domain, load_reuse, run_asks,
+                                  tier_for)
 
 
 class SpyClient:
-    """Cliente falso que CONTA dispatches. Se o no-leak falhar, calls > 0 denuncia."""
+    """Cliente falso que CONTA dispatches — é como se mede cache hit vs. re-fetch."""
 
     def __init__(self, text="resposta", citations=None):
         self.calls = 0
@@ -40,8 +41,6 @@ class SpyClient:
 
 ASK = {"id": "a1", "natureza": "publica",
        "query": "qual o NRR mediano de SaaS B2B em 2026?"}
-SECRET_ASK = {"id": "a2", "natureza": "sensivel",
-              "query": "o NRR da Acme Corp caiu abaixo de 100% no Q2?"}
 
 
 def main() -> int:
@@ -53,223 +52,9 @@ def main() -> int:
         results.append(bool(cond))
 
     try:
-        # ---- a trava, no ponto que importa: ANTES do dispatch ----
-        spy = SpyClient()
-        try:
-            research(spy, SECRET_ASK, evidence_model="m", denylist=["Acme"])
-            case("T6: query com token sensível é BLOQUEADA", False)
-        except LeakBlocked:
-            case("T6: query com token sensível é BLOQUEADA", True)
-        case("T6: bloqueio acontece ANTES de qualquer call (zero dispatch)", spy.calls == 0)
-
-        spy = SpyClient()
-        try:  # o token no ask está capitalizado; a denylist, não
-            research(spy, SECRET_ASK, evidence_model="m", denylist=["acme"])
-            case("T6: match é case-insensitive", False)
-        except LeakBlocked:
-            case("T6: match é case-insensitive", spy.calls == 0)
-
-        # ---- REGRESSÃO: o guard tinha bypass trivial por unicode e espaço ----
-        # Todas estas passavam antes. Nenhuma é exótica: são reescritas naturais.
-        for variante, desc in [
-            ("o NRR da Acme  Corp caiu?", "espaço duplo"),
-            ("o NRR da Acme-Corp caiu?", "hífen no lugar do espaço"),
-            ("o NRR da Acme\u200bCorp caiu?", "zero-width space"),
-            ("o NRR da Acme\xa0Corp caiu?", "NBSP"),
-            ("o NRR da ACME CORP caiu?", "caixa alta"),
-        ]:
-            spy = SpyClient()
-            try:
-                research(spy, {"id": "v", "query": variante}, evidence_model="m",
-                         denylist=["Acme Corp"])
-                case(f"REGRESSÃO: bypass por {desc} é BLOQUEADO", False)
-            except LeakBlocked:
-                case(f"REGRESSÃO: bypass por {desc} é BLOQUEADO", spy.calls == 0)
-
-        spy = SpyClient()
-        try:  # acento: "Sao Paulo" na denylist tem de pegar "São Paulo"
-            research(spy, {"id": "v", "query": "faturamento em São Paulo"},
-                     evidence_model="m", denylist=["Sao Paulo"])
-            case("REGRESSÃO: bypass por acento é BLOQUEADO", False)
-        except LeakBlocked:
-            case("REGRESSÃO: bypass por acento é BLOQUEADO", spy.calls == 0)
-
-        # ---- REGRESSÃO QUE EU INTRODUZI: token sem letra ASCII era IGNORADO ----
-        # _fold("Сбербанк") == "" e o teste `if tf and tf in q` pulava o token: o guard
-        # ficou estritamente MAIS FRACO que o `token.lower()` que ele substituiu.
-        for tok, q in [("Сбербанк", "receita do Сбербанк"),
-                       ("北京字节跳动", "dados de 北京字节跳动"),
-                       ("Ακμή", "o caso Ακμή")]:
-            try:
-                check_no_leak(q, [tok]); case(f"REGRESSÃO: token {tok!r} bloqueia", False)
-            except LeakBlocked:
-                case(f"REGRESSÃO: token não-ASCII {tok!r} bloqueia (não é ignorado)", True)
-
-        # letras latinas que o NFKD não decompõe eram APAGADAS -> furavam o match
-        for tok, q, desc in [("Orsted", "receita da Ørsted", "Ø"),
-                             ("Lodz", "escritório em Łodz", "Ł"),
-                             ("Thor", "projeto Þor", "Þ")]:
-            try:
-                check_no_leak(q, [tok]); case(f"REGRESSÃO: disfarce com {desc} bloqueia", False)
-            except LeakBlocked:
-                case(f"REGRESSÃO: disfarce com {desc} bloqueia", True)
-        try:
-            check_no_leak("dados de Aсme Cоrp", ["Acme Corp"])  # с e о cirílicos
-            case("REGRESSÃO: homoglifo cirílico bloqueia", False)
-        except LeakBlocked:
-            case("REGRESSÃO: homoglifo cirílico bloqueia", True)
-
-        # e o custo de usabilidade medido: token curto NÃO pode recusar texto inocente
-        try:
-            check_no_leak("qual o custo de aquisicao", ["oc"])
-            case("REGRESSÃO: token curto não gera recusa falsa (squash só p/ token longo)",
-                 True)
-        except LeakBlocked:
-            case("REGRESSÃO: token curto não gera recusa falsa (squash só p/ token longo)",
-                 False)
-
-        # ================= CONTRATO DA NORMALIZAÇÃO (red tests) =================
-        # Escritos ANTES da reescrita. Três patches pontuais pioraram este guard; estes
-        # quatro casos são o contrato que a reescrita tem de satisfazer sem regredir
-        # nenhum dos casos acima.
-
-        # C1 — token não-latino NUNCA vira fragmento ASCII curto.
-        # Hoje _fold('Ямал')=='a', então essa denylist recusa quase toda query.
-        try:
-            check_no_leak("qual o NRR de SaaS B2B em 2025", ["Ямал"])
-            case("C1: token cirílico não vira fragmento que recusa query inocente", True)
-        except LeakBlocked:
-            case("C1: token cirílico não vira fragmento que recusa query inocente", False)
-        try:
-            check_no_leak("what is the average churn", ["Банк"])
-            case("C1b: token cirílico curto não recusa query inocente", True)
-        except LeakBlocked:
-            case("C1b: token cirílico curto não recusa query inocente", False)
-
-        # C2 — token MISTO: o pedaço não-latino tem de ser checado.
-        # Hoje o fallback é gated em `not tf`, e "Сбербанк SA" tem tf='sa' -> pula.
-        for tok, q, desc in [("Сбербанк SA", "receita do Сбербанк", "cirílico + sufixo"),
-                             ("北京字节跳动 Ltd", "dados de 北京字节跳动", "CJK + sufixo")]:
-            try:
-                check_no_leak(q, [tok])
-                case(f"C2: token misto ({desc}) bloqueia pelo pedaço não-latino", False)
-            except LeakBlocked:
-                case(f"C2: token misto ({desc}) bloqueia pelo pedaço não-latino", True)
-
-        # C3 — token CURTO ainda tem de pegar o join com caractere invisível.
-        # Hoje o squash só vale para >=7 chars, então "Big Co" volta a vazar.
-        for tok, q in [("Big Co", "receita da Big\u200bCo em 2025"),
-                       ("Acme SA", "o caso Acme\u200bSA")]:
-            try:
-                check_no_leak(q, [tok])
-                case(f"C3: token curto {tok!r} pega o join com zero-width", False)
-            except LeakBlocked:
-                case(f"C3: token curto {tok!r} pega o join com zero-width", True)
-
-        # C4 — e sem reintroduzir recusa falsa por colagem.
-        try:
-            check_no_leak("qual o custo de aquisicao", ["oc"])
-            case("C4: token curto não recusa texto inocente por colagem", True)
-        except LeakBlocked:
-            case("C4: token curto não recusa texto inocente por colagem", False)
-
-        # C5 — a MESMA falta de fronteira, no passo (1). Escrito depois de atacar a
-        # CLASSE em vez do caso: o C4 acima passava por sorte (a substring "oc" não
-        # ocorre naquela query específica), e o passo (1) `tf in qf` nunca teve fronteira
-        # nenhuma — é substring crua na query dobrada, desde o código original.
-        # Por que importa mais do que parece: a doutrina diz "falso positivo é seguro".
-        # É seguro para o dado e péssimo para o guard — um no-leak que recusa "casa"
-        # porque a denylist tem "SA" ensina o usuário a encurtar a denylist, e aí o falso
-        # positivo vira o vetor do vazamento. Cada caso abaixo é uma palavra comum de
-        # português/inglês de negócio que carrega a sigla dentro.
-        for tok, q, onde in [("SA",  "qual o uso da casa",            "casa"),
-                             ("Co",  "analise de compra recorrente",  "compra"),
-                             ("oc",  "o processo de vendas",          "processo"),
-                             ("res", "resultado do trimestre",        "resultado"),
-                             ("rr",  "qual a barreira de entrada",    "barreira")]:
-            try:
-                check_no_leak(q, [tok])
-                case(f"C5: token {tok!r} não recusa por estar dentro de {onde!r}", True)
-            except LeakBlocked:
-                case(f"C5: token {tok!r} não recusa por estar dentro de {onde!r}", False)
-
-        # C6 — e o passo (1) continua pegando o que é pra pegar (multi-palavra, separador
-        # trocado, e o token longo embutido num run maior via squash).
-        for tok, q, desc in [("Acme Corp", "resumo da Acme Corp hoje",   "multi-palavra"),
-                             ("Acme Corp", "resumo da Acme-Corp hoje",   "separador trocado"),
-                             ("Acme Corp", "relatorio da AcmeCorpLtda",  "embutido num run maior"),
-                             ("Acme Corp", "dados de Aсme Cоrp",         "homoglifo cirílico")]:
-            try:
-                check_no_leak(q, [tok])
-                case(f"C6: passo (1) ainda bloqueia — {desc}", False)
-            except LeakBlocked:
-                case(f"C6: passo (1) ainda bloqueia — {desc}", True)
-
-        # C7 — VAZAMENTO no penhasco do >=7. Achado no review do próprio fix do C5:
-        # o passo (2b) só olhava token com squash >=7, então o token colado dentro de um
-        # run MAIOR escapava quando o squash tinha 5 ou 6 chars. "Big Co" não bloqueava
-        # "BigCoLtda" e "Acme SA" não bloqueava "AcmeSALtda" — nome de empresa seguido de
-        # sufixo societário é a forma mais comum que existe. Não é regressão do C5 (já
-        # vazava antes), mas o comentário do (2b) dizia pegar "o token embutido num run
-        # maior", e isso só era verdade acima de 7 chars. Over-claim meu, no código.
-        for tok, q in [("Big Co",    "receita da BigCoLtda em 2025"),
-                       ("Acme SA",   "o caso AcmeSALtda"),
-                       ("Big Co",    "sobre BigCoHoldings"),
-                       ("Big Co",    "sobre a HoldingBigCo"),
-                       ("Acme Corp", "relatorio da AcmeCorpLtda")]:
-            try:
-                check_no_leak(q, [tok])
-                case(f"C7: {tok!r} colado num run maior ({q.split()[-1]}) vaza", False)
-            except LeakBlocked:
-                case(f"C7: {tok!r} colado num run maior ({q.split()[-1]}) vaza", True)
-
-        # C8 — e o remédio do C7 não pode reabrir o C4/C5. O token curto de UMA palavra
-        # continua fora do caminho de substring; só entra token longo (>=7) ou token
-        # multi-palavra com >=5 (que carrega fronteira interna e não colide por acaso).
-        for tok, q, onde in [("SA",    "qual o uso da casa",           "casa"),
-                             ("oc",    "o processo de vendas",         "processo"),
-                             ("res",   "resultado do trimestre",       "resultado"),
-                             ("senha", "o fluxo desenhado pelo time",  "desenhado"),
-                             ("a b",   "o trabalho do time",           "trabalho")]:
-            try:
-                check_no_leak(q, [tok])
-                case(f"C8: token {tok!r} segue sem recusar {onde!r}", True)
-            except LeakBlocked:
-                case(f"C8: token {tok!r} segue sem recusar {onde!r}", False)
-
-        # C9 — o ramo de IGUALDADE do (2a), sozinho. Achado por teste de mutação: matando
-        # `any(ts == w ...)` nenhum teste ficava vermelho, porque todo caso que o exercia
-        # também passava pelo ramo de substring. O ramo só é a única rede para token
-        # MULTI-PALAVRA curto demais para o substring (squash < 5) e colado por caractere
-        # invisível — aí o passo (1) não vê (a query virou uma palavra só), o (2b) não é
-        # elegível, e sem o (2a) vaza. Um ramo sem teste é um ramo que alguém apaga.
-        for tok, q in [("3M Co", "receita da 3M​Co em 2025"),
-                       ("BP SA", "o caso BP​SA")]:
-            try:
-                check_no_leak(q, [tok])
-                case(f"C9: token multi-palavra curto {tok!r} colado por invisível", False)
-            except LeakBlocked:
-                case(f"C9: token multi-palavra curto {tok!r} colado por invisível", True)
-
-        # ---- REGRESSÃO: omitir a denylist não pode ser o caminho permissivo ----
-        spy = SpyClient()
-        try:
-            research(spy, SECRET_ASK, evidence_model="m")   # kwarg esquecido
-            case("REGRESSÃO: OMITIR a denylist é ERRO (antes era o caminho que despachava)",
-                 False)
-        except ValueError:
-            case("REGRESSÃO: OMITIR a denylist é ERRO (antes era o caminho que despachava)",
-                 spy.calls == 0)
-        spy = SpyClient()
-        try:
-            run_asks(spy, [ASK], evidence_model="m", cache_dir=tmp / "om", base_dir=tmp)
-            case("REGRESSÃO: run_asks também exige a denylist explícita", False)
-        except ValueError:
-            case("REGRESSÃO: run_asks também exige a denylist explícita", spy.calls == 0)
-
         # ---- REGRESSÃO: reuse não pode ler fora do base_dir ----
         # O material reusado entra no prefixo de TODAS as células pagas e vai ao provedor
-        # externo — e check_no_leak nunca o vê. O review leu OPENROUTER_API_KEY por aqui.
+        # externo. O review leu OPENROUTER_API_KEY por aqui — este caminho TEM adversário.
         base = tmp / "runbase"
         (base / "mat").mkdir(parents=True)
         (base / "mat" / "ok.md").write_text("material legítimo do run")
@@ -294,46 +79,11 @@ def main() -> int:
         except ValueError:
             case("REGRESSÃO: symlink de ARQUIVO apontando pra fora é RECUSADO", True)
 
-        # ---- misconfiguração falha FECHADA ----
-        spy = SpyClient()
-        try:
-            research(spy, ASK, evidence_model="m", denylist=[])
-            case("T6: denylist=[] é misconfiguração e falha FECHADA", False)
-        except ValueError:
-            case("T6: denylist=[] é misconfiguração e falha FECHADA", spy.calls == 0)
-
-        spy = SpyClient()
-        try:
-            run_asks(spy, [ASK], evidence_model="m", cache_dir=tmp / "c1",
-                     base_dir=tmp, denylist=[])
-            case("T6: run_asks também recusa denylist=[]", False)
-        except ValueError:
-            case("T6: run_asks também recusa denylist=[]", spy.calls == 0)
-
-        # ---- None = público de propósito (F9), não pode virar bloqueio ----
-        spy = SpyClient()
-        item = research(spy, ASK, evidence_model="m", denylist=None)
-        case("T6: denylist=None (público) despacha normalmente",
-             spy.calls == 1 and item["id"] == "a1")
-
-        spy = SpyClient()
-        item = research(spy, ASK, evidence_model="m", denylist=["Acme"])
-        case("T6: denylist não-vazia sem match na query despacha", spy.calls == 1)
-
-        # ---- cache não pode burlar denylist mais dura ----
-        f_none = _cache_filename(ASK, "m", None, None)
-        f_deny = _cache_filename(ASK, "m", ["Acme"], None)
-        f_deny2 = _cache_filename(ASK, "m", ["Acme", "ARR"], None)
-        case("T6: mudar a denylist INVALIDA o cache (não reusa resposta de outra política)",
-             len({f_none, f_deny, f_deny2}) == 3)
-        case("cache também é keyed por blocklist de domínio",
-             _cache_filename(ASK, "m", None, ["x.com"]) != f_none)
-
         # ---- run_asks: cache hit não re-billa, e re-deriva leak_suspect ----
         cache = tmp / "c2"
         spy = SpyClient(citations=["https://blog.concorrente.com/post"])
         items = run_asks(spy, [ASK], evidence_model="m", cache_dir=cache,
-                         base_dir=tmp, denylist=None, domain_blocklist=None)
+                         base_dir=tmp, domain_blocklist=None)
         case("sem blocklist, item não é suspeito", items[0]["leak_suspect"] is False)
         case("resposta foi cacheada em disco", any(cache.glob("*.json")))
 
@@ -341,7 +91,7 @@ def main() -> int:
         # É o desenho: política nova nunca herda resposta julgada pela política velha.
         before = spy.calls
         items = run_asks(spy, [ASK], evidence_model="m", cache_dir=cache,
-                         base_dir=tmp, denylist=None, domain_blocklist=["concorrente.com"])
+                         base_dir=tmp, domain_blocklist=["concorrente.com"])
         case("blocklist nova invalida o cache e re-busca", spy.calls == before + 1)
         case("F7: citação de domínio bloqueado marca leak_suspect",
              items[0]["leak_suspect"] is True
@@ -350,7 +100,7 @@ def main() -> int:
         # MESMA política -> cache hit de verdade: nem gasta call, nem perde o leak_suspect
         before = spy.calls
         items = run_asks(spy, [ASK], evidence_model="m", cache_dir=cache,
-                         base_dir=tmp, denylist=None, domain_blocklist=["concorrente.com"])
+                         base_dir=tmp, domain_blocklist=["concorrente.com"])
         case("cache hit (mesma política) não gasta call nova", spy.calls == before)
         case("T6: leak_suspect sobrevive ao round-trip do cache",
              items[0]["leak_suspect"] is True
@@ -364,7 +114,7 @@ def main() -> int:
         d["citations"][0]["blocked"] = False
         hit.write_text(json.dumps(d))
         items = run_asks(spy, [ASK], evidence_model="m", cache_dir=cache,
-                         base_dir=tmp, denylist=None, domain_blocklist=["concorrente.com"])
+                         base_dir=tmp, domain_blocklist=["concorrente.com"])
         case("T6: cache dizendo 'limpo' NÃO é aceito — blocklist atual é reaplicada",
              items[0]["leak_suspect"] is True
              and items[0]["citations"][0]["blocked"] is True)
@@ -374,7 +124,7 @@ def main() -> int:
             p.write_text("{ não é json")
         spy2 = SpyClient()
         items = run_asks(spy2, [ASK], evidence_model="m", cache_dir=cache,
-                         base_dir=tmp, denylist=None)
+                         base_dir=tmp)
         case("cache corrompido re-busca (não crasha)", spy2.calls == 1 and len(items) == 1)
 
         # ---- corpo menciona domínio bloqueado mesmo sem citation formal ----
@@ -388,13 +138,6 @@ def main() -> int:
         # ---- tier: domínio desconhecido não aterra número ----
         case("tier de domínio desconhecido é 'baixa' (conservador)",
              tier_for("https://blog-aleatorio.xyz/post") == "baixa")
-
-        # ---- check_no_leak isolado ----
-        try:
-            check_no_leak("nada sensível aqui", ["segredo"])
-            case("check_no_leak passa quando não há token", True)
-        except LeakBlocked:
-            case("check_no_leak passa quando não há token", False)
 
         print(f"{sum(results)}/{len(results)} testes ok")
         return 0 if all(results) else 1

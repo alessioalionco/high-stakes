@@ -126,12 +126,26 @@ for t in tests/test_*.py; do python3 -m "tests.$(basename "$t" .py)" || exit 1; 
 
 ## Estado
 
-**219 testes em 11 suítes — todos os 12 módulos com rede própria.** O que está coberto: o
-caminho do dinheiro (teto por run válido entre processos, cobrança conservadora em falha
-pós-disparo), o dispatcher paralelo (célula que falha não some, id duplicado barrado antes
-do gasto, resume travado por hash de input), o no-leak da pesquisa externa (bloqueio
-verificado por espião que conta chamadas), a precedência de config, as agregações, os
-gates de render, e um smoke que roda o produto como quem acabou de instalar.
+**191 testes em 11 suítes — todos os 12 módulos com rede própria.** O que está coberto: o
+caminho do dinheiro (teto por run, cobrança conservadora em falha pós-disparo), o
+dispatcher paralelo (célula que falha não some, id duplicado barrado antes do gasto,
+resume travado por hash de input), a contenção do material reusado (não lê fora do
+diretório do run, nem por symlink), a blocklist de domínio na resposta, a precedência de
+config, as agregações, os gates de render, e um smoke que roda o produto como quem acabou
+de instalar.
+
+### O que sai daqui, e o que NÃO filtra isso
+
+Rodar este motor significa mandar o seu material para provedores de modelo e de busca —
+está no critério de elegibilidade, e é a premissa, não um efeito colateral. **Não existe
+filtro de conteúdo na saída.** Existiu: uma denylist de termos que recusava a query. Foi
+removida de propósito. Ela protegia o dado do dono contra o dono — quem escreve a query,
+quem é dono do material e quem escolhe os provedores são a mesma pessoa —, e o que ela
+produzia na prática era recusa falsa em query legítima.
+
+No lugar dela fica o **Gate B**: antes de qualquer disparo pago, o motor mostra o que vai
+sair e espera o seu OK. Um humano com a lista na frente decide melhor que uma heurística
+de substring, e é honesto sobre quem está decidindo.
 
 A promessa de zero dependência é **verificada por AST** a cada run da suíte, não confiada:
 se alguém adicionar um `import requests`, o teste falha e nomeia o módulo.

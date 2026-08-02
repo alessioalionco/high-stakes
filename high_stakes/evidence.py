@@ -2,11 +2,40 @@
 evidence.py — camada de evidência genérica (sonar deep-research via OpenRouter).
 
 Extraída do protótipo. TUDO específico-de-caso virou PARÂMETRO
-(regra 1A′): denylist de no-leak, modelo de evidência, paths de cache/pack,
-blocklist de domínios — moram no config do experimento, nunca aqui.
+(regra 1A′): modelo de evidência, paths de cache/pack, blocklist de domínios —
+moram no config do experimento, nunca aqui.
+
+EGRESS — por que NÃO existe filtro de conteúdo na saída
+-------------------------------------------------------
+Este módulo já teve um `check_no_leak`: uma denylist de termos sensíveis que
+recusava a query se ela contivesse algum deles. Foi REMOVIDO, e a remoção é a
+decisão, não uma pendência.
+
+O guard protegia o dado do dono contra o dono. Quem escreve a query, quem é dono
+do material e quem roda a ferramenta são a MESMA pessoa; os provedores são
+escolhidos por ela e o critério de elegibilidade do produto já diz, na cara, que
+usar isto significa mandar material a múltiplos providers. Não existe adversário
+neste caminho — e sem adversário, blindar contra evasão (homoglifo, zero-width,
+token partido por hífen) é custo puro.
+
+O custo foi medido, não estimado: quatro rodadas de review adversarial
+concentradas nesse matcher, cada uma fechando uma classe de evasão e abrindo
+outra. O que ele produzia de verdade era recusa falsa em query legítima —
+`["São Paulo"]` recusava "clima em São Tomé", `["C++"]` recusava "a linguagem C" —
+e recusa falsa aqui é pior do que parece: quebra a perna cara do run (o deep
+research) e ensina o usuário a esvaziar a própria denylist.
+
+O que fica no lugar, e é mais forte: o **Gate B**
+(`core/sections/interactive-gates.md`) mostra ao usuário exatamente o que vai
+sair e pede OK antes do disparo. Um humano decidindo com a lista na frente vale
+mais que uma heurística de substring — e é honesto sobre quem está decidindo.
+
+O que este módulo AINDA protege (e são outros problemas, de verdade): a blocklist
+de domínio na resposta (`leak_suspect`), e o `load_reuse`, que recusa caminho
+fora do `base_dir` — inclusive por symlink. Esse sim tem adversário: um arquivo
+que entra no prefixo de todas as células pagas.
 
 Gates:
-  - no-leak (falha FECHADA): query não pode conter token da `denylist` passada.
   - cache por ask em `cache_dir`: re-run não re-billa.
   - tiering por domínio (primária > analista > imprensa > vendor/blog) — genérico.
   - `domain_blocklist` marca citação de domínio-fonte proibido
@@ -19,7 +48,6 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -45,177 +73,6 @@ _DEFAULT_SYSTEM = (
 )
 
 
-class LeakBlocked(RuntimeError):
-    """Query externa contém token sensível -> recusa rodar (no-leak fechado)."""
-
-
-# Letras latinas que o NFKD NÃO decompõe: sem isto elas caem no `[^0-9a-z]` e são
-# APAGADAS, e apagar uma letra fura o match ("Ørsted" virava "rsted"). São a grafia real
-# de nomes nórdicos, turcos e poloneses — mesma família do "São Paulo" que motivou o fix.
-# A decisão 4 da spec do ticket mandava deixar SÓ o bloco latino aqui. Ela está errada, e
-# a verificação é de uma linha: sem os homoglifos cirílicos, `_fold("dados de Aсme Cоrp")`
-# (com с e о cirílicos) é `"dados de a me c rp"`, que NÃO contém "acme corp" — o disfarce
-# por homoglifo volta a passar, e a regressão que existe para isso fica vermelha.
-# O que estilhaçava o token em fragmento de 1-2 chars não eram estes mapeamentos (são
-# equivalências 1:1, o token sobrevive inteiro): eram as letras SEM forma ASCII, que o
-# `[^0-9a-z]` apagava. Essas saem pelo `_lost_info`, não daqui.
-_TRANSLIT = str.maketrans({
-    "ø": "o", "æ": "ae", "œ": "oe", "ł": "l", "đ": "d", "ð": "d", "þ": "th",
-    "ı": "i", "ħ": "h", "ß": "ss", "ŋ": "n", "ſ": "s",
-    # homoglifos cirílicos/gregos de uso comum em disfarce (equivalência 1:1 — a letra
-    # vira um ASCII único e o token inteiro sobrevive; não "estilhaça" como as sem forma)
-    "а": "a", "е": "e", "о": "o", "с": "c", "р": "p", "х": "x", "у": "y", "к": "k",
-    "α": "a", "ε": "e", "ο": "o", "ρ": "p", "τ": "t", "υ": "u", "κ": "k",
-})
-
-
-def _norm_pre(s: str) -> str:
-    """NFKD + tira acentos/invisíveis + casefold + translitera — ANTES de apagar não-ASCII.
-
-    Parada aqui (antes do `re.sub`) porque é aqui que dá pra distinguir "token perdeu
-    letra real" de "token virou ASCII limpo": se sobrar algum char >127 depois do
-    translit, é cirílico/CJK/grego que o `[^0-9a-z]` ia simplesmente APAGAR — e apagar
-    vira fragmento curto que casa com quase tudo. Ver `_lost_info`.
-    """
-    s = unicodedata.normalize("NFKD", s)
-    s = "".join(c for c in s if unicodedata.category(c) not in ("Mn", "Cf"))
-    return s.casefold().translate(_TRANSLIT)
-
-
-def _fold(s: str) -> str:
-    """Forma canônica ASCII para comparar: NFKD + sem acentos/invisíveis + translit.
-
-    Confirmado no review: com denylist ["Acme Corp"], passavam "Acme  Corp" (espaço
-    duplo), "Acme\nCorp", "Acme-Corp", "Acme\u200bCorp" (zero-width) e "Acme\xa0Corp"
-    (NBSP); com ["Sao Paulo"], passava "São Paulo". Todas reescritas naturais, nenhuma
-    exótica — e o guard tem UM trabalho.
-
-    Falso positivo aqui é seguro (recusa enviar); falso negativo vaza.
-    """
-    return re.sub(r"[^0-9a-z]+", " ", _norm_pre(s)).strip()
-
-
-def _squash(s: str) -> str:
-    """Como _fold, mas SEM separador — para casar palavra colada por invisível.
-
-    Apagar um invisível JUNTA as palavras: "Acme\u200bCorp" vira "acmecorp", que não
-    contém "acme corp". Comparar também a forma colada fecha o bypass — mas colar contra
-    a QUERY inteira colava toda fronteira de palavra e dava +10pp de recusa falsa. Aqui o
-    squash só casa contra PALAVRAS inteiras da query (fronteira de palavra), não contra a
-    query colada — é a fronteira que evita o falso positivo, não o corte por comprimento
-    que o patch antigo usava (>=7 chars) e que deixava token curto vazar (C3).
-    """
-    return re.sub(r"[^0-9a-z]+", "", _norm_pre(s))
-
-
-def _lost_info(s: str) -> bool:
-    """A forma ASCII do token PERDEU informação?
-
-    True quando, depois de NFKD + translit, ainda resta algum char >127: é
-    cirílico/CJK/grego que `_fold` ia APAGAR, transformando o token num fragmento curto
-    que casa com quase tudo (`denylist=["Ямал"]` recusava "SaaS B2B em 2025"). Nesses
-    casos a forma ASCII é DESCARTADA e o token vai pelo caminho amplo (`_fold_amplo`).
-    """
-    return any(ord(c) > 127 for c in _norm_pre(s))
-
-
-def _fold_amplo(s: str) -> str:
-    """Fallback amplo: NFKC + sem invisíveis + casefold — PRESERVA não-ASCII.
-
-    É o caminho do token cirílico/CJK/grego: o que foi DESCARTADO da forma ASCII é
-    comparado AQUI, palavra a palavra, contra a query na mesma forma ampla. A regressão
-    que este guard já teve: `_fold("Сбербанк")==""` e o teste `if tf` PULAVA o token,
-    ficando estritamente mais fraco que o `token.lower()` antigo. Um guard que ignora em
-    silêncio é pior que um guard ingênuo.
-    """
-    s = unicodedata.normalize("NFKC", s)
-    s = "".join(c for c in s if unicodedata.category(c) not in ("Mn", "Cf"))
-    return re.sub(r"\s+", " ", s.casefold()).strip()
-
-
-def check_no_leak(query: str, denylist: list[str]) -> None:
-    """Recusa enviar `query` se ela contiver qualquer token da `denylist`.
-
-    Comparação ADITIVA (decisão 2): as formas ASCII dobrada, colada-com-fronteira e a
-    ampla são testadas TODAS para cada token; basta UMA casar para bloquear. O gate
-    antigo `not tf and ta and ta in qa` era o bug: token misto ("Сбербанк SA") tinha
-    `tf='sa'` (ASCII usável) e PULAVA o caminho amplo, deixando o pedaço não-latino sem
-    checagem nenhuma. Agora o caminho amplo é sempre avaliado quando o token tem parte
-    não-ASCII (independente do pedaço ASCII casar ou não).
-
-    Falso positivo é seguro (recusa enviar); falso negativo vaza. Na dúvida, bloquear.
-    """
-    qf, qa = _fold(query), _fold_amplo(query)
-    qwords = qf.split()  # fronteira de palavra: o squash compara contra PALAVRA
-    for token in denylist:
-        tf, ta = _fold(token), _fold_amplo(token)
-        ascii_usable = bool(tf) and not _lost_info(token)
-        # (1) forma ASCII dobrada, COM fronteira de palavra — só se o token não perdeu
-        # informação. `tf in qf` (substring crua, como estava desde o código original)
-        # recusa a query inocente que apenas contém a sigla dentro de uma palavra:
-        # denylist ["SA"] barrava "casa", ["Co"] barrava "compra", ["res"] barrava
-        # "resultado". O `\b` dos dois lados resolve sem perder nada de multi-palavra:
-        # `tf` já está dobrado para [0-9a-z ] com espaço simples, e `qf` também, então
-        # "acme corp" casa em "resumo da acme corp hoje" e em "acme-corp" (o separador
-        # já virou espaço no fold). O token embutido num run maior ("AcmeCorpLtda") não
-        # vem daqui — vem do passo (2b), que é onde ele sempre esteve.
-        #
-        # O que se perde, dito na cara: token CURTO de palavra única deixa de casar com
-        # a forma sufixada ("Acme" não pega mais "Acmes"). É o preço da fronteira, e o
-        # >=7 do (2b) cobre o caso realista, porque denylist de verdade traz o nome
-        # inteiro ("Acme Corp"), não o radical.
-        if ascii_usable and re.search(rf"\b{re.escape(tf)}\b", qf):
-            raise LeakBlocked(
-                f"query bloqueada: contém token sensível {token!r}. "
-                "Abstraia a query antes de enviar (no-leak)."
-            )
-        # (2) forma colada. Duas comparações, com alcances deliberadamente diferentes:
-        #
-        #   (2a) IGUALDADE com uma palavra inteira da query, para QUALQUER comprimento.
-        #        É o que pega o join com invisível sem o corte por comprimento que
-        #        deixava token curto vazar (C3). Igualdade, e não `in`: `ts in w` casa
-        #        DENTRO da palavra, sem fronteira nenhuma — a denylist ["SA"] recusaria
-        #        "casa", que é exatamente a recusa falsa proibida pelo C4. A fronteira é
-        #        o ponto; sem ela o passo (2) vira o corte por comprimento outra vez, só
-        #        que implícito e invisível.
-        #
-        #   (2b) SUBSTRING DENTRO DE UMA PALAVRA da query — é o que pega o token colado
-        #        num run maior ("Acme Corp" em "AcmeCorpLtda"). Duas escolhas aqui, e as
-        #        duas foram erro antes:
-        #
-        #        · o alvo é a PALAVRA, não a query inteira colada. Colar a query gruda
-        #          toda fronteira ("big companhia" -> "bigcompanhia") e inventa colisão
-        #          entre palavras que apenas se tocam. Por palavra, isso não acontece.
-        #
-        #        · a porta de entrada é `len>=7 OU (multi-palavra e len>=5)`, não `>=7`
-        #          seco. O corte em 7 deixava passar exatamente o caso mais comum que
-        #          existe: nome curto + sufixo societário. "Big Co" (squash 5) não
-        #          bloqueava "BigCoLtda"; "Acme SA" (6) não bloqueava "AcmeSALtda".
-        #          Token de várias palavras carrega fronteira interna, então casar por
-        #          acaso dentro de uma palavra é bem menos provável que num token curto
-        #          de palavra única — por isso ele entra a partir de 5, e o de palavra
-        #          única só a partir de 7. Sem a cláusula multi-palavra, uma denylist com
-        #          "senha" recusaria "desenhado"; com ela, não.
-        if ascii_usable:
-            ts = _squash(token)
-            elegivel_substring = len(ts) >= 7 or (len(tf.split()) >= 2 and len(ts) >= 5)
-            if ts and (any(ts == w for w in qwords)
-                       or (elegivel_substring and any(ts in w for w in qwords))):
-                raise LeakBlocked(
-                    f"query bloqueada: contém token sensível {token!r}. "
-                    "Abstraia a query antes de enviar (no-leak)."
-                )
-        # (3) caminho amplo: cada PALAVRA não-ASCII do token, contra a query ampla.
-        # Sempre avaliado (aditivo) — fecha o buraco do token misto, cujo pedaço ASCII
-        # não cobre o pedaço cirílico/CJK/grego.
-        for w in ta.split():
-            if any(ord(c) > 127 for c in w) and w in qa:
-                raise LeakBlocked(
-                    f"query bloqueada: contém token sensível {token!r}. "
-                    "Abstraia a query antes de enviar (no-leak)."
-                )
-
-
 def tier_for(url: str) -> str:
     u = (url or "").lower()
     for tier, needles in _TIER_RULES:
@@ -237,42 +94,14 @@ def body_leak_suspect(text: str, domain_blocklist: list[str] | None) -> bool:
     return any(b.lower() in t for b in domain_blocklist or [])
 
 
-_DENYLIST_OMITIDA = object()  # sentinela: distingue "não passou" de "passou None"
-
-
-def _resolve_denylist(denylist):
-    """Omitir a denylist era o caminho PERMISSIVO: o default `None` desligava o guard, e
-    quem esquecesse o kwarg despachava sem checagem nenhuma — enquanto o erro mais
-    inocente (`[]`) falhava duro. Agora omitir é erro; `None` tem de ser digitado."""
-    if denylist is _DENYLIST_OMITIDA:
-        raise ValueError(
-            "denylist é obrigatória. Passe a lista de tokens sensíveis, ou passe "
-            "explicitamente denylist=None para declarar que esta query é pública. "
-            "Omitir não é uma opção: o silêncio não pode ser o caminho que despacha.")
-    return denylist
-
-
-def _check_denylist_config(denylist: list[str] | None) -> None:
-    """Distingue None (público — no-leak desligado DE PROPÓSITO) de []
-    (misconfiguração: quis no-leak mas passou lista vazia) — falha FECHADA."""
-    if denylist is not None and len(denylist) == 0:
-        raise ValueError(
-            "denylist=[] é misconfiguração: lista VAZIA não protege nada. "
-            "Use denylist=None para claims públicas (no-leak desligado de "
-            "propósito) ou uma lista não-vazia de tokens sensíveis."
-        )
-
-
 def _cache_filename(ask: dict, evidence_model: str,
-                    denylist: list[str] | None,
                     domain_blocklist: list[str] | None) -> str:
-    """Nome de cache = id sanitizado + hash10(query+modelo+blocklist+denylist):
+    """Nome de cache = id sanitizado + hash10(query+modelo+blocklist):
     qualquer mudança de input INVALIDA o cache (não reusa resposta obsoleta)."""
     blob = json.dumps({
         "query": ask.get("query"),
         "evidence_model": evidence_model,
         "blocklist": sorted(domain_blocklist or []),
-        "denylist": sorted(denylist) if denylist is not None else None,
     }, ensure_ascii=False, sort_keys=True)
     h = hashlib.sha256(blob.encode("utf-8")).hexdigest()[:10]
     safe_id = _SAFE_FILENAME.sub("-", str(ask["id"]))
@@ -298,21 +127,17 @@ def extract_citations(raw: dict, domain_blocklist: list[str] | None = None) -> l
 
 
 def research(client, ask: dict, *, evidence_model: str,
-             denylist=_DENYLIST_OMITIDA,
              domain_blocklist: list[str] | None = None,
              system_prompt: str = _DEFAULT_SYSTEM,
              max_tokens: int = 4000, temperature: float = 0.2,
              timeout: int = 600) -> dict:
     """Roda 1 ask via deep-research. Retorna item do evidence-pack.
 
-    `denylist=None` desliga o no-leak (claims públicas vão verbatim);
-    lista não-vazia = falha FECHADA se a query contiver token sensível.
+    Não existe filtro de conteúdo na saída, e é de propósito — ver a nota de egress
+    no topo deste módulo. O que entra na query é o que o dono do material escolheu
+    mandar; a decisão de mandar é do Gate B, com um humano olhando.
     """
-    denylist = _resolve_denylist(denylist)
-    _check_denylist_config(denylist)  # []=misconfig, falha FECHADA
     query = ask["query"]
-    if denylist:
-        check_no_leak(query, denylist)  # falha FECHADA antes de qualquer envio
 
     out = client.chat(
         evidence_model,
@@ -385,16 +210,13 @@ def load_reuse(ask: dict, base_dir: Path, domain_blocklist: list[str] | None = N
 
 def run_asks(client, asks: list[dict], *, evidence_model: str,
              cache_dir: Path, base_dir: Path,
-             denylist=_DENYLIST_OMITIDA,
              domain_blocklist: list[str] | None = None,
              only_first: bool = False) -> list[dict]:
     """Roda os asks (cache keyed por id+hash de input em cache_dir; `reuse` lê local).
 
-    Cache: filename = id sanitizado + hash10(query+modelo+blocklist+denylist) —
-    qualquer mudança invalida. Cache corrompido -> re-fetch (não crash). Ao LER
-    do cache, blocked/leak_suspect são RE-derivados com a blocklist ATUAL."""
-    denylist = _resolve_denylist(denylist)
-    _check_denylist_config(denylist)
+    Cache: filename = id sanitizado + hash10(query+modelo+blocklist) — qualquer
+    mudança invalida. Cache corrompido -> re-fetch (não crash). Ao LER do cache,
+    blocked/leak_suspect são RE-derivados com a blocklist ATUAL."""
     cache_dir = Path(cache_dir)
     asks = asks[:1] if only_first else asks
     items = []
@@ -403,8 +225,7 @@ def run_asks(client, asks: list[dict], *, evidence_model: str,
             print(f"[reuse] {ask['id']}")
             items.append(load_reuse(ask, base_dir, domain_blocklist))
             continue
-        cached = cache_dir / _cache_filename(ask, evidence_model, denylist,
-                                             domain_blocklist)
+        cached = cache_dir / _cache_filename(ask, evidence_model, domain_blocklist)
         if cached.exists():  # não re-billa o que já temos
             try:
                 item = json.loads(cached.read_text())
@@ -424,7 +245,7 @@ def run_asks(client, asks: list[dict], *, evidence_model: str,
                 continue
         print(f"[sonar] {ask['id']} ... (deep research, pode levar 1-3min)")
         item = research(client, ask, evidence_model=evidence_model,
-                        denylist=denylist, domain_blocklist=domain_blocklist)
+                        domain_blocklist=domain_blocklist)
         print(f"        custo ${item['cost_usd']:.4f} · {len(item['citations'])} fontes "
               f"· provider {item['provider']}"
               + ("  ⚠️ leak_suspect" if item["leak_suspect"] else ""))
