@@ -6,6 +6,7 @@ dos findings do review de 20/Jul (falso-negativos por substring, jargão por fam
 quotes adjacentes, listas como prosa, '6.5x' vs heading 6.5).
 """
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -239,6 +240,22 @@ def main() -> int:
                             "piso de ruído não medido; X-B3 e B-qverify"), None),
         expect_cli(),
     ]
+    # ===== achados da AUDITORIA POR MUTAÇÃO: checagens do gate sem teste =====
+    # Quatro condições do gate podiam ser APAGADAS sem nenhuma suíte ficar vermelha.
+    # É a pior classe de lacuna que existe num gate: ele reprova o documento errado e
+    # ninguém percebe se ele parar de reprovar — o gate vira decoração e o dossiê sai.
+    results += [
+        expect("§1 sem nenhum item 1.N reprova",
+               re.sub(r"### 1\.\d[^\n]*", "### Um bloco sem número", GOOD),
+               "§1"),
+        expect("§4 sem o fecho-veredito em bold reprova",
+               GOOD.replace("**Em uma frase", "**Resumindo"),
+               "fecho-veredito"),
+        expect("§6 sem a subseção 6.4 reprova",
+               re.sub(r"### 6\.4", "### 6.9", GOOD),
+               "6.4"),
+    ]
+
     print(f"{sum(results)}/{len(results)} testes ok")
     return 0 if all(results) else 1
 

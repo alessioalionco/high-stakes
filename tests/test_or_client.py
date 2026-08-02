@@ -107,6 +107,13 @@ class Handler(BaseHTTPRequestHandler):
                 b"data: [DONE]\n\n"
             )
             return self._send(200, sse_ok, {"Content-Type": "text/event-stream"})
+        if Handler.mode == "custo_nan":
+            # o provedor reporta custo NaN no usage: e a outra porta (alem do pricing)
+            # por onde um numero nao-finito entra e desliga o teto.
+            body = (b'data: {"choices":[{"delta":{"content":"oi"}}],'
+                    b'"usage":{"cost":NaN,"prompt_tokens":10,"completion_tokens":2}}\n\n'
+                    b"data: [DONE]\n\n")
+            return self._send(200, body, {"Content-Type": "text/event-stream"})
         if Handler.mode == "sem_done":
             # gera conteúdo de verdade e o stream acaba SEM [DONE]: houve geração
             # (e cobrança lá em cima), mas a resposta não fecha. Sempre.
@@ -433,6 +440,32 @@ def main() -> int:
         led9.reserve(1.0)
         led9.reconcile(1.0, -5.0)
         case("custo REAL negativo não deflaciona o gasto", abs(led9.spent - 1.0) < 1e-9)
+
+        # ---- AUDITORIA POR MUTAÇÃO: duas guardas do dinheiro sem teste ----
+        # A1 — `usage.cost` não-finito vindo do provedor. Havia teste para o PRICING do
+        # catálogo não-finito (N3), nenhum para o custo REAL da resposta, que é o outro
+        # jeito de o número envenenado entrar: dali ele vai direto pro ledger.
+        Handler.mode, Handler.hits = "custo_nan", 0
+        led_cn = BudgetLedger(cap_usd=5.0, persist=False)
+        c_cn = ORClient(ledger=led_cn, api_key="k", outputs_dir=tmp / "custonan")
+        c_cn._catalog = {"test/model": {"pricing": {"prompt": "0.000001",
+                                                    "completion": "0.000002"}}}
+        out_cn = c_cn.chat("test/model", [{"role": "user", "content": "oi"}], max_tokens=10)
+        case("A1: usage.cost não-finito vira a estimativa, não envenena o ledger",
+             math.isfinite(led_cn.spent) and math.isfinite(out_cn["cost_usd"]))
+
+        # A2 — ledger cujo topo não é objeto JSON (uma lista, por exemplo). Antes disso
+        # levantava AttributeError cru no meio do `_read_disk`, que não é um erro que
+        # alguém saiba interpretar; e o fail-closed só cobria os campos, não o formato.
+        lp_lista = tmp / "topo-lista.json"
+        lp_lista.write_text('[{"spent_usd": 1.0}]')
+        try:
+            BudgetLedger(cap_usd=5.0, persist=True, ledger_path=lp_lista)
+            case("A2: ledger cujo topo não é objeto falha FECHADA (não AttributeError)",
+                 False)
+        except LedgerCorrupted:
+            case("A2: ledger cujo topo não é objeto falha FECHADA (não AttributeError)",
+                 True)
 
         # ---- Q8: a allowlist não pode admitir add-on PAGO ----
         # `plugins` é por onde a OpenRouter liga web search e afins. A taxa do add-on não
