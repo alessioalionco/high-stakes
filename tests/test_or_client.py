@@ -311,19 +311,22 @@ def main() -> int:
         case("ledger AUSENTE ou vazio segue sendo run novo legítimo",
              BudgetLedger(cap_usd=10.0, ledger_path=pv).spent == 0.0)
 
-        # ---- REGRESSÃO: o cap efetivo é o MENOR, não o maior ----
-        # cap_usd era escrito no ledger e nunca lido de volta. Reproduzido no review:
-        # instância com cap $5 bloqueava em $4; outra com cap $100 gastava $50 no mesmo run.
+        # ---- O que o cap por-run protege: o GASTO acumula ----
+        # Este bloco testava `min(cap da instância, cap no disco)`. Esse desenho foi
+        # REVERTIDO — ver a nota no __init__ do BudgetLedger. Ele envenenava o ledger de
+        # forma irreversível e não protegia no caso em que a instância de cap baixo era
+        # recusada. O que precisa valer, e vale, é o acúmulo do gasto entre instâncias:
+        # cada uma para no teto DELA contra o total já gasto no run.
         pm = tmp / "cap" / "cost-ledger.json"
         pm.parent.mkdir(parents=True)
         a5 = BudgetLedger(cap_usd=5.0, ledger_path=pm)
         a5.reserve(4.0); a5.reconcile(4.0, 4.0)
-        b100 = BudgetLedger(cap_usd=100.0, ledger_path=pm)
+        a5b = BudgetLedger(cap_usd=5.0, ledger_path=pm)   # mesmo teto, mesmo run
         try:
-            b100.reserve(50.0)
-            case("REGRESSÃO: cap maior NÃO sobrepõe o cap já gravado no run", False)
+            a5b.reserve(2.0)   # 4 já gastos + 2 = 6 > 5
+            case("cap por-run: o gasto de outra instância CONTA contra o meu teto", False)
         except BudgetExceeded:
-            case("REGRESSÃO: cap maior NÃO sobrepõe o cap já gravado no run", True)
+            case("cap por-run: o gasto de outra instância CONTA contra o meu teto", True)
 
         # ---- REGRESSÃO: extra_body não pode furar a estimativa ----
         led_x = BudgetLedger(cap_usd=10.0, persist=False)
@@ -430,6 +433,52 @@ def main() -> int:
         led9.reserve(1.0)
         led9.reconcile(1.0, -5.0)
         case("custo REAL negativo não deflaciona o gasto", abs(led9.spent - 1.0) < 1e-9)
+
+        # ---- Q8: a allowlist não pode admitir add-on PAGO ----
+        # `plugins` é por onde a OpenRouter liga web search e afins. A taxa do add-on não
+        # entra em `_estimate`, então o chamador reserva só o custo de token e descobre o
+        # resto na fatura — que é exatamente o furo que a allowlist existe pra fechar.
+        c_pl = ORClient(ledger=BudgetLedger(cap_usd=5.0, persist=False),
+                        api_key="k", outputs_dir=tmp / "plug")
+        c_pl._catalog = {"test/model": {"pricing": {"prompt": "0.000001",
+                                                    "completion": "0.000002"}}}
+        try:
+            c_pl.chat("test/model", [{"role": "user", "content": "oi"}],
+                      extra_body={"plugins": [{"id": "web"}]})
+            case("Q8: extra_body rejeita 'plugins' (add-on pago fora da estimativa)", False)
+        except ValueError:
+            case("Q8: extra_body rejeita 'plugins' (add-on pago fora da estimativa)", True)
+        except Exception:
+            case("Q8: extra_body rejeita 'plugins' (add-on pago fora da estimativa)", False)
+
+        # ---- Q10: timeout maior que o TTL da reserva é recusado ----
+        # A reserva expira pelo TTL. Se uma tentativa pode durar mais que isso, a reserva
+        # some com a chamada ainda VIVA e outro processo gasta o mesmo orçamento. `timeout`
+        # é parâmetro livre e cells.py encaminha o request da tarefa.
+        try:
+            c_pl.chat("test/model", [{"role": "user", "content": "oi"}],
+                      timeout=or_client.RESERVATION_TTL_S)  # x MAX_RETRIES estoura o TTL
+            case("Q10: timeout que estoura o TTL da reserva é recusado ANTES do dispatch",
+                 False)
+        except ValueError:
+            case("Q10: timeout que estoura o TTL da reserva é recusado ANTES do dispatch",
+                 True)
+        except Exception:
+            case("Q10: timeout que estoura o TTL da reserva é recusado ANTES do dispatch",
+                 False)
+
+        # ---- Q3: a cobrança do fracasso é UM commit, não dois ----
+        # charge_failure e charge_extra eram duas escritas, cada uma pegando o lock. Entre
+        # elas o disco mostrava gasto MENOR que o real, e outro processo lia esse número e
+        # reservava em cima. Cada escrita era atômica; a CONTA não era.
+        lp_q3 = tmp / "q3.json"
+        l_q3 = BudgetLedger(cap_usd=100.0, persist=True, ledger_path=lp_q3)
+        l_q3.reserve(1.0)
+        antes_calls = json.loads(lp_q3.read_text())["calls"] if lp_q3.exists() else 0
+        l_q3.charge_failure(1.0, extra_usd=3.0)
+        d_q3 = json.loads(lp_q3.read_text())
+        case("Q3: fracasso + geradas anteriores viram UMA escrita (soma correta)",
+             abs(d_q3["spent_usd"] - 4.0) < 1e-9 and d_q3["calls"] == antes_calls + 1)
 
         # ================== NaN: O NÚMERO QUE DESLIGA O TETO ==================
         # Achado no review adversarial e reproduzido antes de virar teste. `nan > cap` é
@@ -591,44 +640,42 @@ def main() -> int:
         # red tests que deveriam ter existido na primeira vez — um teste teria denunciado
         # o anúncio falso na hora.
 
-        # ---- L1: o cap EFETIVO tem de ser o que fica no disco ----
-        # _effective_cap já existia e era calculado num lugar só (o ramo lento do
-        # reserve), e _write_disk gravava self.cap_usd por cima. Efeito: o piso do run
-        # sobe. Processo com cap $5 fixa o teto do run em $5; um processo com cap $50
-        # entra, respeita o $5 para si (min), mas GRAVA $50 — e o próximo processo lê $50
-        # como se fosse o teto do run. O cap volta a ser por-processo, que é exatamente o
-        # que o T4 existe para impedir.
+        # ---- L1: o ledger NÃO fica cravado no menor teto que já passou por ele ----
+        # Eu tinha implementado `min(cap desta instância, cap no disco)` e persistido o
+        # menor. Isso criava um ledger envenenado: um typo de $0.50 num run barrava um run
+        # legítimo de $50 depois, e a única saída era apagar o arquivo — que apaga o
+        # histórico de gasto junto. O cap é política de quem está rodando AGORA; o gasto é
+        # que é estado do run.
         lp = tmp / "cap-efetivo.json"
         baixo = BudgetLedger(cap_usd=5.0, persist=True, ledger_path=lp)
         baixo.reserve(1.0)
         baixo.reconcile(1.0, 1.0)
         alto = BudgetLedger(cap_usd=50.0, persist=True, ledger_path=lp)
-        alto.reserve(1.0)
-        alto.reconcile(1.0, 1.0)
-        no_disco = json.loads(lp.read_text())["cap_usd"]
-        case("L1: cap gravado no disco é o EFETIVO (o menor), não o da instância",
-             abs(no_disco - 5.0) < 1e-9)
-        terceiro = BudgetLedger(cap_usd=100.0, persist=True, ledger_path=lp)
         try:
-            terceiro.reserve(10.0)   # já gastou 2; 2+10=12 > piso do run (5)
-            case("L1: terceiro processo herda o piso do run, não o teto inflado", False)
+            alto.reserve(10.0)   # 1 gasto + 10 = 11, abaixo do teto DESTA instância (50)
+            case("L1: cap de uma instância anterior não vira teto permanente do arquivo",
+                 True)
         except BudgetExceeded:
-            case("L1: terceiro processo herda o piso do run, não o teto inflado", True)
+            case("L1: cap de uma instância anterior não vira teto permanente do arquivo",
+                 False)
+        alto.release(10.0)
 
-        # L1c: o cap efetivo tem de mandar no RECONCILE também, não só no reserve.
-        # Achado por mutação: trocar `self._cap_efetivo` por `self.cap_usd` no reconcile
-        # não derrubava teste nenhum. É o ponto onde o custo REAL (que pode passar da
-        # estimativa) interrompe o run — usar o cap da instância ali deixa um processo
-        # de cap alto seguir gastando acima do piso que o run já fixou.
+        # L1c: o reconcile interrompe pelo teto DESTA instância contra o gasto
+        # acumulado do run. É o ponto onde o custo REAL (que pode passar da estimativa)
+        # para o run — e ele tem de olhar o total do arquivo, não só o que este processo
+        # gastou, senão duas instâncias furam o teto juntas.
         lp_r = tmp / "cap-reconcile.json"
-        BudgetLedger(cap_usd=5.0, persist=True, ledger_path=lp_r)._commit(0.0, 0)
-        folgado = BudgetLedger(cap_usd=50.0, persist=True, ledger_path=lp_r)
-        folgado.reserve(1.0)
+        r1 = BudgetLedger(cap_usd=5.0, persist=True, ledger_path=lp_r)
+        r1.reserve(3.0); r1.reconcile(3.0, 3.0)          # run já tem 3 gastos
+        r2 = BudgetLedger(cap_usd=5.0, persist=True, ledger_path=lp_r)
+        r2.reserve(1.0)
         try:
-            folgado.reconcile(1.0, 6.0)  # real 6 > piso do run (5), < cap da instância (50)
-            case("L1c: reconcile interrompe pelo cap EFETIVO, não pelo da instância", False)
+            r2.reconcile(1.0, 2.5)   # real 2.5; total 3 + 2.5 = 5.5 > 5
+            case("L1c: reconcile para pelo gasto ACUMULADO do run, não só pelo local",
+                 False)
         except BudgetExceeded:
-            case("L1c: reconcile interrompe pelo cap EFETIVO, não pelo da instância", True)
+            case("L1c: reconcile para pelo gasto ACUMULADO do run, não só pelo local",
+                 True)
 
         # ---- L2: ledger que PARSEIA mas tem lixo tipado é corrupção, não run novo ----
         # O fail-closed só cobria JSON ilegível. `{"spent_usd": "muito"}` e
@@ -666,6 +713,21 @@ def main() -> int:
                 case(f"L2c: {desc} falha FECHADA (não devolve orçamento ao cap)", False)
             except LedgerCorrupted:
                 case(f"L2c: {desc} falha FECHADA (não devolve orçamento ao cap)", True)
+
+        # L2d — `reservations: null` era convertido para {} DE PROPÓSITO por mim, e isso
+        # é fail-open: reserva em voo de outro processo é justamente o que impede dois
+        # runs de gastarem o mesmo dinheiro. Apagá-las devolve tudo ao cap.
+        for txt, d in [('{"spent_usd":1.0,"calls":1,"reservations":null}', "reservations null"),
+                       ('{"spent_usd":1.0,"calls":2.7,"reservations":{}}', "calls fracionario"),
+                       ('{"spent_usd":1.0,"calls":1,"reservations":{"x":{"usd":"2.0","ts":1}}}',
+                        "usd como string")]:
+            f_ = tmp / f"l2d-{d.replace(' ', '-')}.json"
+            f_.write_text(txt)
+            try:
+                BudgetLedger(cap_usd=15.0, persist=True, ledger_path=f_)
+                case(f"L2d: {d} falha FECHADA", False)
+            except LedgerCorrupted:
+                case(f"L2d: {d} falha FECHADA", True)
 
         # e o caso legítimo continua legítimo: ausente/vazio = run novo
         lp3 = tmp / "novo.json"

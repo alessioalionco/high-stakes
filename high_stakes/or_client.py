@@ -141,12 +141,28 @@ class BudgetLedger:
 
     def __init__(self, cap_usd: float = DEFAULT_CAP_USD, persist: bool = True,
                  ledger_path: Path | None = None):
+        # NaN e inf passavam: `nan > cap` e False, entao um ledger criado com cap NaN
+        # reservava mil dolares sem erro. 0 e negativo barravam por ACIDENTE (a
+        # projecao fica > cap), o que e a coisa certa pelo motivo errado -- e um cap 0
+        # silencioso parece "sem orcamento", nao "config quebrada".
+        if not isinstance(cap_usd, (int, float)) or isinstance(cap_usd, bool) \
+                or not math.isfinite(cap_usd) or cap_usd <= 0:
+            raise ValueError(
+                f"cap_usd invalido: {cap_usd!r}. Precisa ser numero finito > 0 -- o cap "
+                "e a unica coisa entre um bug de laco e a sua fatura.")
         self.cap_usd = cap_usd
-        # O teto que VALE. `cap_usd` é o que ESTA instância pediu; o efetivo é o menor
-        # entre ele e o que o run já registrou no disco, e é ele que manda em toda
-        # decisão de gasto. Existiam separados porque `_effective_cap` era calculado
-        # num lugar só (o ramo lento do reserve) e jogado fora em todos os outros —
-        # inclusive no write, que gravava `cap_usd` por cima e SUBIA o piso do run.
+        # O CAP NAO E ESTADO DO RUN -- o GASTO e. Isto ja foi `min(cap desta instancia,
+        # cap no disco)` e a ideia estava errada nas duas pontas: uma instancia de cap
+        # baixo que era RECUSADA nunca chegava a persistir o teto menor (entao o min
+        # nao protegia nada), e quando persistia o ledger ficava cravado no menor teto
+        # que ja passou por ali -- um typo de $0.50 barrava um run legitimo de $50 PARA
+        # SEMPRE, e a unica saida era apagar o ledger, que apaga o historico de gasto
+        # junto. O min protegia o dono do ledger contra ele mesmo, e cobrava isso caro.
+        #
+        # O que o teto por-run precisa garantir e que o GASTO acumule entre processos, e
+        # disso o ledger da conta sozinho: cada instancia para no teto DELA contra o
+        # total acumulado. Dois processos com tetos diferentes e um fato do operador,
+        # nao um ataque.
         self._cap_efetivo = cap_usd
         self._reserved = 0.0
         self._spent = 0.0
@@ -228,11 +244,23 @@ class BudgetLedger:
         # negativo é outra história: ledger pré-fix tem o sentinela -1/-1 do catálogo.
         # É número, foi lido, e o conservador é tratar como zero — não como corrupção.
         spent = max(0.0, _numero("spent_usd", float))
-        calls = max(0, _numero("calls", int))
+        calls_bruto = _numero("calls", float)
+        if calls_bruto != int(calls_bruto):
+            raise LedgerCorrupted(
+                f"ledger em {self._ledger_path} tem calls={calls_bruto!r}, que nao e\n"
+                "inteiro. Este codigo nunca escreve fracao ali: o arquivo foi mexido.")
+        calls = max(0, int(calls_bruto))
         res, now = {}, time.time()
         reservas = raw.get("reservations", _AUSENTE)
-        if reservas is _AUSENTE or reservas is None:
-            reservas = {}
+        if reservas is _AUSENTE:
+            reservas = {}  # nunca gravado: run novo
+        elif reservas is None:
+            # `null` era convertido para {} DE PROPOSITO por mim, e e fail-open:
+            # reserva em voo e o que impede dois processos de gastarem o mesmo
+            # dinheiro. Apaga-las devolve tudo ao cap.
+            raise LedgerCorrupted(
+                f"ledger em {self._ledger_path} tem reservations=null. Reserva em voo "
+                "ilegivel = nao despacha (apagar devolveria o orcamento ao cap).")
         if not isinstance(reservas, dict):
             raise LedgerCorrupted(
                 f"ledger em {self._ledger_path} tem reservations={type(reservas).__name__} "
@@ -245,6 +273,13 @@ class BudgetLedger:
                 raise LedgerCorrupted(
                     f"ledger em {self._ledger_path}: reserva {k!r} malformada ({v!r}). "
                     "Descartá-la em silêncio devolveria o orçamento dela ao cap.")
+            for campo in ("usd", "ts"):
+                x = v[campo]
+                if isinstance(x, bool) or not isinstance(x, (int, float)):
+                    raise LedgerCorrupted(
+                        f"ledger em {self._ledger_path}: reserva {k!r} tem {campo}="
+                        f"{x!r} ({type(x).__name__}) onde devia haver numero. String "
+                        "conversivel nao conta: quem escreveu isso nao foi este codigo.")
             try:
                 usd, ts = float(v["usd"]), float(v["ts"])
             except (TypeError, ValueError) as e:
@@ -272,14 +307,15 @@ class BudgetLedger:
         diferentes no mesmo run davam cap efetivo = o MAIOR. Quem abriu com $5 achava que
         o teto era $5 enquanto o outro gastava $50 no mesmo ledger."""
         dc = disk.get("cap_usd")
-        if dc is not None and not math.isfinite(dc):
-            dc = None  # cap nao-finito no disco nao e teto: e ausencia de teto
-        if dc is None or dc <= 0:
+        if dc is None or not math.isfinite(dc) or dc <= 0:
             return self.cap_usd
         if dc != self.cap_usd:
-            print(f"[ledger] AVISO: este run já tem cap ${dc:.2f} no ledger e esta "
-                  f"instância pediu ${self.cap_usd:.2f} — vale o MENOR.")
-        return min(self.cap_usd, dc)
+            # AVISO, nao regra. Ver a nota no __init__: transformar isto em `min`
+            # envenenava o ledger de forma irreversivel.
+            print(f"[ledger] nota: este ledger foi aberto antes com cap ${dc:.2f} e "
+                  f"esta instância pediu ${self.cap_usd:.2f}. O GASTO acumulado é "
+                  "compartilhado; cada instância para no teto dela.")
+        return self.cap_usd
 
     def _write_disk(self, spent: float, calls: int, reservations: dict,
                     cap: float | None = None) -> None:
@@ -397,16 +433,23 @@ class BudgetLedger:
             else:
                 self._spent += usd
 
-    def charge_failure(self, est_usd: float) -> None:
+    def charge_failure(self, est_usd: float, extra_usd: float = 0.0) -> None:
         """Call falhou pós-dispatch: contabiliza a ESTIMATIVA como gasto
         (conservador — stream dropado pode ter sido cobrado). Sem cap-raise aqui
-        (o erro original propaga); o cap pega no próximo reserve/reconcile."""
+        (o erro original propaga); o cap pega no próximo reserve/reconcile.
+
+        `extra_usd` sao as geracoes ANTERIORES que ja rodaram no provedor. Entram AQUI,
+        no mesmo commit, e nao numa chamada separada de `charge_extra`: duas escritas
+        eram duas janelas de lock, e entre elas o ledger no disco mostrava gasto MENOR
+        que o real -- outro processo lia esse numero e reservava em cima dele. Cada
+        escrita era atomica; o que nao era atomico era a CONTA."""
+        total = est_usd + max(0.0, extra_usd)
         with self._lock:
             self._reserved = max(0.0, self._reserved - est_usd)
             if self._persist:
-                self._commit(est_usd, 1)
+                self._commit(total, 1)
             else:
-                self._spent += est_usd
+                self._spent += total
                 self._calls += 1
 
     def release(self, est_usd: float) -> None:
@@ -555,7 +598,10 @@ class ORClient:
             # raciocínio: é o que o roster usa pra desligar reasoning em modelo caro
             "reasoning", "include_reasoning",
             # metadados que não afetam custo
-            "user", "metadata", "transforms", "plugins",
+            "user", "metadata", "transforms",
+            # `plugins` NAO entra: e por onde a OpenRouter liga add-on pago (web
+            # search, por exemplo), e a taxa do add-on nao esta em `_estimate`. O
+            # chamador reservaria so o custo de token e descobriria o resto na fatura.
         }
         if extra_body:
             intrusas = sorted(set(extra_body) - _PERMITIDAS)
@@ -566,6 +612,16 @@ class ORClient:
                     "rota, provedor ou número de gerações fura o cap silenciosamente. "
                     f"Permitidas: {sorted(_PERMITIDAS)}. Se a chave for realmente "
                     "inofensiva, adicione-a à allowlist junto com o motivo.")
+        # O TTL da reserva assume um teto de duracao por tentativa. `timeout` e
+        # parametro livre e `cells.py` encaminha o `request` da tarefa, entao um timeout
+        # maior que a premissa deixa a reserva EXPIRAR com a chamada ainda viva -- e ai
+        # outro processo gasta o mesmo dinheiro.
+        if timeout * MAX_RETRIES > RESERVATION_TTL_S:
+            raise ValueError(
+                f"timeout={timeout}s x {MAX_RETRIES} tentativas passa do TTL da reserva "
+                f"({RESERVATION_TTL_S}s): a reserva expiraria com a chamada em voo e "
+                "outro processo poderia gastar o mesmo orcamento. Suba "
+                "RESERVATION_TTL_S junto se o timeout precisa ser maior.")
         est = self._estimate(model, messages, max_tokens)
         self.ledger.reserve(est)  # pode levantar BudgetExceeded -> não dispara
 
@@ -597,19 +653,15 @@ class ORClient:
             # contabiliza a ESTIMATIVA como gasto em vez de soltar a reserva.
             print(f"[ledger] call {model} falhou pós-dispatch — estimativa "
                   f"${est:.4f} contabilizada como gasto (conservador).")
-            self.ledger.charge_failure(est)
-            # e o que JÁ FOI GERADO nas tentativas anteriores também foi cobrado lá
-            # em cima. Sem isto o ledger subconta o fracasso em até MAX_RETRIES vezes.
-            # `charge_failure` acima JA cobrou UMA estimativa (e e ele quem solta a
-            # reserva). Somar `est * geradas` por cima cobrava est*(geradas+1): 5
-            # estimativas para 4 tentativas. O total certo e uma estimativa por
-            # tentativa que gerou, com o piso de uma (houve dispatch, pode ter sido
-            # cobrado mesmo sem produzir) -- entao aqui entra so o EXCEDENTE.
+            # UMA estimativa por tentativa que gerou, com piso de uma (houve dispatch,
+            # pode ter sido cobrado mesmo sem produzir). Tudo num commit so: em duas
+            # escritas, entre elas o disco mostra gasto menor que o real e outro
+            # processo reserva em cima disso.
             excedente = max(0, contagem.get("geradas", 0) - 1)
             if excedente:
-                print(f"[ledger] {excedente} geração(ões) além da já contabilizada — "
-                      f"cobrando ${est * excedente:.4f} a mais.")
-                self.ledger.charge_extra(est * excedente)
+                print(f"[ledger] +{excedente} geração(ões) anterior(es) — cobrando "
+                      f"${est * (1 + excedente):.4f} no total.")
+            self.ledger.charge_failure(est, extra_usd=est * excedente)
             raise
 
         usage = data.get("usage", {}) or {}

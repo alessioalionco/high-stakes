@@ -167,6 +167,19 @@ def run_cell(client, task: dict, out_dir: Path) -> dict:
                 ]
     except Exception as e:  # noqa: BLE001 — chat levantou, ou parse levantou ≠ SchemaInvalid
         exception_err = f"{type(e).__name__}: {e}"
+        # O cap pode estourar DEPOIS de a chamada ter sido paga: o `reconcile` do ledger
+        # levanta com o custo real já debitado. Nesse caso a exceção carrega a resposta em
+        # `.resposta` — e ignorá-la joga fora um texto que custou dinheiro, registra
+        # `cost_usd: 0` e deixa a célula elegível para re-rodar (e pagar de novo). A
+        # atribuição de `out` no `try` nunca completou, então sem isto ela fica `{}`.
+        paga = getattr(e, "resposta", None)
+        if isinstance(paga, dict) and paga.get("text") is not None:
+            out = paga
+            cell_cost += paga.get("cost_usd", 0.0) or 0.0
+            try:
+                parsed = parse(paga["text"])
+            except Exception:  # noqa: BLE001 — salvar o texto pago vale mesmo sem parse
+                pass
 
     base = {k: v for k, v in meta.items() if k not in _ENGINE_KEYS}
     base.update({

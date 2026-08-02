@@ -184,6 +184,28 @@ def main() -> int:
              r["cost_usd"] == 0.10 and r["status"] == "ok")
         case("meta legítima do experimento é preservada", r["persona"] == "unit economist")
 
+        # ---- a resposta JÁ PAGA que vem numa exceção não pode ser jogada fora ----
+        # O cap pode estourar DEPOIS de a chamada ter sido paga: o reconcile do ledger
+        # levanta com o custo real já debitado, e a exceção carrega o resultado em
+        # `.resposta`. Ignorá-la registra `cost_usd: 0`, perde um texto que custou
+        # dinheiro e deixa a célula elegível para re-rodar — pagando de novo.
+        # Achado no review: o `chat` passou a anexar a resposta, mas quem consome a
+        # exceção (aqui) nunca foi ensinado a olhar. Meia correção é zero correção.
+        class ClientQueEstouraOCap:
+            def chat(self, model, messages, **kw):
+                from high_stakes.or_client import BudgetExceeded
+                e = BudgetExceeded("cap estourado no reconcile")
+                e.resposta = {"text": '{"ok": "pago"}', "cost_usd": 0.42,
+                              "provider": "spy", "usage": {}, "raw": {}}
+                raise e
+
+        r_pago = run_cell(ClientQueEstouraOCap(),
+                          task("c_pago", parse=lambda s: json.loads(s)), d)
+        case("cap estourado pós-pagamento: o texto pago é PRESERVADO",
+             r_pago.get("parsed") == {"ok": "pago"} or "pago" in str(r_pago))
+        case("cap estourado pós-pagamento: o custo real é registrado (não zero)",
+             abs(r_pago["cost_usd"] - 0.42) < 1e-9)
+
         print(f"{sum(results)}/{len(results)} testes ok")
         return 0 if all(results) else 1
     finally:
