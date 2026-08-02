@@ -92,6 +92,24 @@ class Handler(BaseHTTPRequestHandler):
             return
         if Handler.mode == "always_500":
             return self._send(500, b"upstream boom")
+        if Handler.mode == "erro_429_no_corpo":
+            # 200 no header, erro 429 NO CORPO do stream. Rate limit = o provedor
+            # RECUSOU; nada foi gerado e nada foi cobrado lá. As duas primeiras
+            # tentativas recusam, a terceira responde de verdade.
+            if Handler.hits <= 2:
+                body = (b'data: {"error":{"code":429,"message":"rate limited"}}\n\n')
+                return self._send(200, body, {"Content-Type": "text/event-stream"})
+            sse_ok = (
+                b'data: {"choices":[{"delta":{"content":"oi"}}],'
+                b'"usage":{"cost":0.5,"prompt_tokens":10,"completion_tokens":2}}\n\n'
+                b"data: [DONE]\n\n"
+            )
+            return self._send(200, sse_ok, {"Content-Type": "text/event-stream"})
+        if Handler.mode == "sem_done":
+            # gera conteúdo de verdade e o stream acaba SEM [DONE]: houve geração
+            # (e cobrança lá em cima), mas a resposta não fecha. Sempre.
+            body = b'data: {"choices":[{"delta":{"content":"parcial"}}]}\n\n'
+            return self._send(200, body, {"Content-Type": "text/event-stream"})
         sse = (
             b'data: {"choices":[{"delta":{"content":"oi"}}]}\n\n'
             b'data: {"choices":[{"delta":{"content":" mundo"}}],'
@@ -410,6 +428,93 @@ def main() -> int:
         led9.reserve(1.0)
         led9.reconcile(1.0, -5.0)
         case("custo REAL negativo não deflaciona o gasto", abs(led9.spent - 1.0) < 1e-9)
+
+        # ============ CAMINHO DO DINHEIRO: RETRY, COBRANÇA E RESPOSTA PAGA ============
+
+        # M1 (#3) — 429 no corpo NÃO é geração. `geradas` conta toda `_Retriable`, e o
+        # rate limit entra como _Retriable — mas rate limit é o provedor RECUSANDO: nada
+        # foi gerado e nada foi cobrado lá. Cada falso `geradas` cobra uma ESTIMATIVA
+        # inteira a mais; com 2 recusas o ledger infla o run sem um centavo real.
+        Handler.mode, Handler.hits = "erro_429_no_corpo", 0
+        led_429 = BudgetLedger(cap_usd=100.0, persist=False)
+        c429 = ORClient(ledger=led_429, api_key="k", outputs_dir=tmp / "r429")
+        c429._catalog = {"test/model": {"pricing": {"prompt": "0.000001",
+                                                    "completion": "0.000002"}}}
+        out429 = c429.chat("test/model", [{"role": "user", "content": "oi"}],
+                           max_tokens=10)
+        case("M1: 429 no corpo do stream não conta como geração cobrada",
+             abs(led_429.spent - out429["cost_usd"]) < 1e-9)
+
+        # M2 (#4) — no caminho de FALHA, o que já foi gerado tem de ser cobrado.
+        # `charge_extra` só é alcançado no caminho de SUCESSO: se o retry esgota, o
+        # `geradas` morre dentro da exceção (vira texto na mensagem) e o ledger cobra só
+        # uma estimativa, quando o provedor gerou e cobrou MAX_RETRIES vezes. É a
+        # subcontagem que o charge_extra existe pra impedir, no ramo onde ela é maior.
+        Handler.mode, Handler.hits = "sem_done", 0
+        led_f = BudgetLedger(cap_usd=100.0, persist=False)
+        cf = ORClient(ledger=led_f, api_key="k", outputs_dir=tmp / "falha")
+        cf._catalog = {"test/model": {"pricing": {"prompt": "0.000001",
+                                                  "completion": "0.000002"}}}
+        est_f = cf._estimate("test/model", [{"role": "user", "content": "oi"}], 10)
+        try:
+            cf.chat("test/model", [{"role": "user", "content": "oi"}], max_tokens=10)
+        except Exception:
+            pass
+        case("M2: retry esgotado cobra TODAS as gerações, não só uma estimativa",
+             led_f.spent >= est_f * or_client.MAX_RETRIES - 1e-9)
+
+        # M3 (#5) — resposta JÁ PAGA não pode sumir quando o cap estoura. O
+        # `reconcile` levanta BudgetExceeded depois de a chamada ter sido cobrada; se a
+        # exceção sobe pelada, o texto pago vai pro lixo e o run reprocessa (e paga) de
+        # novo. O dinheiro já saiu: quem chamou tem de conseguir salvar o resultado.
+        Handler.mode, Handler.hits = "ok", 0
+        led_c = BudgetLedger(cap_usd=0.2, persist=False)  # menor que o custo (0.5)
+        cc = ORClient(ledger=led_c, api_key="k", outputs_dir=tmp / "capestoura")
+        cc._catalog = {"test/model": {"pricing": {"prompt": "0.000001",
+                                                  "completion": "0.000002"}}}
+        try:
+            cc.chat("test/model", [{"role": "user", "content": "oi"}], max_tokens=10)
+            case("M3: cap estourado no reconcile levanta BudgetExceeded", False)
+        except BudgetExceeded as e:
+            case("M3: cap estourado no reconcile levanta BudgetExceeded", True)
+            case("M3: a resposta JÁ PAGA viaja na exceção (não é jogada fora)",
+                 getattr(e, "resposta", None) is not None
+                 and e.resposta.get("text") == "oi mundo")
+
+        # M4 (#9) — ler `.text` de um 429 não pode transformar retriável em terminal.
+        # Com stream=True o corpo ainda está aberto; se a leitura estourar o prazo, a
+        # exceção sobe de dentro do ramo do 429 e o retry NUNCA acontece. O motor
+        # desiste de uma chamada que o provedor mandou repetir.
+        class _RespVenenosa:
+            status_code = 429
+            headers = {"Retry-After": "0"}
+
+            @property
+            def text(self):
+                raise DeadlineExceeded("prazo estourou lendo o corpo do 429")
+
+            def close(self):
+                pass
+
+        class _SessaoVenenosa:
+            def __init__(self):
+                self.posts = 0
+
+            def post(self, *a, **kw):
+                self.posts += 1
+                return _RespVenenosa()
+
+        sv = _SessaoVenenosa()
+        led_v = BudgetLedger(cap_usd=100.0, persist=False)
+        cv = ORClient(ledger=led_v, api_key="k", session=sv, outputs_dir=tmp / "venen")
+        cv._catalog = {"test/model": {"pricing": {"prompt": "0.000001",
+                                                  "completion": "0.000002"}}}
+        try:
+            cv.chat("test/model", [{"role": "user", "content": "oi"}], max_tokens=10)
+        except Exception:
+            pass
+        case("M4: 429 cujo corpo não pode ser lido ainda assim é RE-TENTADO",
+             sv.posts == or_client.MAX_RETRIES)
 
         # ================== LOTE QUE FOI ANUNCIADO E NUNCA APLICADO ==================
         # Três correções que eu reportei como feitas e não estavam no arquivo: o script

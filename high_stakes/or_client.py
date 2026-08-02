@@ -551,14 +551,22 @@ class ORClient:
             "X-Title": "high-stakes",
         }
 
+        contagem: dict = {"geradas": 0}
         try:
-            data, geradas = self._post_with_retry(headers, payload, timeout)
+            data, geradas = self._post_with_retry(headers, payload, timeout, contagem)
         except Exception:
             # CONSERVADOR: streams dropados podem ter sido cobrados upstream —
             # contabiliza a ESTIMATIVA como gasto em vez de soltar a reserva.
             print(f"[ledger] call {model} falhou pós-dispatch — estimativa "
                   f"${est:.4f} contabilizada como gasto (conservador).")
             self.ledger.charge_failure(est)
+            # e o que JÁ FOI GERADO nas tentativas anteriores também foi cobrado lá
+            # em cima. Sem isto o ledger subconta o fracasso em até MAX_RETRIES vezes.
+            ja_geradas = contagem.get("geradas", 0)
+            if ja_geradas:
+                print(f"[ledger] {ja_geradas} tentativa(s) já gerada(s) antes do "
+                      f"fracasso — cobrando ${est * ja_geradas:.4f} além da estimativa.")
+                self.ledger.charge_extra(est * ja_geradas)
             raise
 
         usage = data.get("usage", {}) or {}
@@ -577,11 +585,9 @@ class ORClient:
             print(f"[ledger] {geradas} tentativa(s) anterior(es) já gerada(s) — "
                   f"cobrando ${est * geradas:.4f} além do custo final.")
             self.ledger.charge_extra(est * geradas)
-        self.ledger.reconcile(est, cost)
-
         choice = (data.get("choices") or [{}])[0]
         text = (choice.get("message") or {}).get("content") or ""
-        return {
+        resposta = {
             "text": text,
             "usage": usage,
             "cost_usd": cost,
@@ -590,13 +596,47 @@ class ORClient:
             "raw": data,
         }
 
+        # O reconcile é o ponto onde o custo REAL pode estourar o cap — e ele levanta.
+        # A resposta acima JÁ FOI PAGA: deixar a exceção subir pelada joga no lixo um
+        # texto que custou dinheiro, e o run que reprocessar vai pagar de novo. O cap
+        # continua interrompendo (é o certo: o dinheiro acabou), mas o resultado viaja
+        # junto para quem chamou poder salvá-lo.
+        try:
+            self.ledger.reconcile(est, cost)
+        except BudgetExceeded as e:
+            e.resposta = resposta
+            raise
+
+        return resposta
+
     class _Retriable(RuntimeError):
-        """Erro transiente (429/5xx, inclusive erro-em-corpo-200) -> retenta."""
+        """Erro transiente (429/5xx, inclusive erro-em-corpo-200) -> retenta.
+
+        `gerou` diz se a tentativa chegou a PRODUZIR no provedor — e portanto se ela foi
+        cobrada lá. Não é detalhe: cada tentativa marcada como gerada cobra uma
+        ESTIMATIVA inteira a mais no ledger. Rate limit (429) é o provedor RECUSANDO;
+        nada foi gerado e nada foi cobrado. Contá-lo como geração inflava o gasto do run
+        sem um centavo real por trás (reproduzido em 6,5×).
+        """
+
+        def __init__(self, msg: str, gerou: bool = True):
+            super().__init__(msg)
+            self.gerou = gerou
 
     def _post_with_retry(
-        self, headers: dict, payload: dict, timeout: int
+        self, headers: dict, payload: dict, timeout: int,
+        contagem: dict | None = None,
     ) -> tuple[dict, int]:
-        """Devolve (resposta, nº de tentativas ANTERIORES que já geraram no provedor)."""
+        """Devolve (resposta, nº de tentativas ANTERIORES que já geraram no provedor).
+
+        `contagem` é um espelho MUTÁVEL de `geradas` para quem chama. O contador vivia
+        só aqui dentro: quando o retry esgotava, ele morria com a exceção (virava texto
+        na mensagem) e o caminho de falha do `chat` cobrava UMA estimativa, quando o
+        provedor tinha gerado e cobrado até MAX_RETRIES vezes. `charge_extra` era
+        inalcançável exatamente no ramo onde a subcontagem é maior.
+        """
+        contagem = {} if contagem is None else contagem
+        contagem.setdefault("geradas", 0)
         last_exc: Exception | None = None
         geradas = 0  # tentativas que chegaram a produzir (e portanto foram cobradas lá)
         for attempt in range(MAX_RETRIES):
@@ -614,15 +654,30 @@ class ORClient:
                 continue
 
             if resp.status_code == 429 or 500 <= resp.status_code < 600:
-                last_exc = RuntimeError(f"OpenRouter {resp.status_code}: {resp.text[:300]}")
+                # `.text` lê o corpo, que com stream=True ainda está aberto: se a
+                # leitura estourar o prazo (DeadlineExceeded) ou o socket cair, a
+                # exceção subia de DENTRO do ramo retriável e o retry nunca acontecia —
+                # o motor desistia de uma chamada que o provedor mandou repetir. O
+                # corpo aqui é só para a mensagem de erro; não vale o run.
+                try:
+                    detalhe = resp.text[:300]
+                except Exception as e:  # noqa: BLE001 — corpo ilegível não é terminal
+                    detalhe = f"(corpo ilegível: {type(e).__name__})"
+                last_exc = RuntimeError(f"OpenRouter {resp.status_code}: {detalhe}")
                 retry_after = resp.headers.get("Retry-After")
                 resp.close()  # stream=True: fecha o socket antes de re-tentar
                 self._sleep_backoff(attempt, retry_after)
                 continue
             if resp.status_code != 200:
-                # 4xx não-retriable (400/401/403/404) -> erro terminal
+                # 4xx não-retriable (400/401/403/404) -> erro terminal. Mesmo cuidado
+                # do ramo acima: corpo ilegível não pode trocar o erro real por um
+                # DeadlineExceeded que esconde o status que causou a parada.
+                try:
+                    detalhe = resp.text[:500]
+                except Exception as e:  # noqa: BLE001
+                    detalhe = f"(corpo ilegível: {type(e).__name__})"
                 raise RuntimeError(
-                    f"OpenRouter {resp.status_code} (terminal): {resp.text[:500]}"
+                    f"OpenRouter {resp.status_code} (terminal): {detalhe}"
                 )
 
             try:
@@ -636,8 +691,11 @@ class ORClient:
                 self._sleep_backoff(attempt, None)
                 continue
             except ORClient._Retriable as exc:
-                # erro-em-corpo-200 ou stream truncado: o upstream JÁ rodou e cobrou
-                geradas += 1
+                # erro-em-corpo-200 ou stream truncado: só conta como cobrada a
+                # tentativa que realmente PRODUZIU lá em cima (ver _Retriable.gerou)
+                if exc.gerou:
+                    geradas += 1
+                    contagem["geradas"] = geradas
                 last_exc = exc
                 resp.close()  # stream aberto -> fecha antes de re-tentar
                 self._sleep_backoff(attempt, None)
@@ -682,7 +740,10 @@ class ORClient:
                 code = err.get("code")
                 msg = err.get("message", "")
                 if code == 429 or (isinstance(code, int) and 500 <= code < 600):
-                    raise ORClient._Retriable(f"upstream {code}: {msg}")
+                    # 429 = recusa (nada gerado, nada cobrado lá). 5xx = o provedor
+                    # começou e morreu: conservador é assumir que gerou e cobrou.
+                    raise ORClient._Retriable(f"upstream {code}: {msg}",
+                                              gerou=(code != 429))
                 raise RuntimeError(f"OpenRouter erro-em-corpo {code} (terminal): {msg}")
             provider = obj.get("provider", provider)
             model_id = obj.get("model", model_id)
