@@ -201,6 +201,54 @@ def main() -> int:
                      '## §1 x\n### 1.1 y\n> "Ele disse que o **ônus da prova** é do deck\n'
                      '> e ninguém contestou." — **The Unit Economist** (lente simulada · X)\n', cells))),
         ]
+        # ATENÇÃO: `results` acima é LISTA LITERAL. `case(...)` solto depois dela imprime
+        # PASS/FAIL e NÃO entra na contagem nem no exit code. Use results.append(...).
+
+        # ---- W1: o gate por BLOCO lava a atribuição malformada ----
+        # `_malformed_attributions` decide por bloco inteiro: se QUALQUER linha do bloco
+        # tem atribuição estrita, o bloco passa — e uma segunda atribuição malformada no
+        # mesmo bloco some. É fail-open num gate cujo trabalho é impedir que uma frase
+        # inventada saia com nome de gente real em cima. Um blockquote pode conter várias
+        # quotes: cada uma tem de ser julgada sozinha.
+        bloco_misto = ('> frase legitima aqui\n'
+                       '> — **The Unit Economist** (lente simulada · Sol)\n'
+                       '> outra frase, atribuida de forma malformada — **Fulano** no meio\n')
+        results.append(case(
+            "W1: atribuição malformada NÃO é lavada por outra válida no mesmo bloco",
+            any(f["status"] == "atribuicao_malformada"
+                for f in verify(bloco_misto, cells))))
+        # e o caso legítimo que motivou o gate por bloco não pode voltar a acusar
+        results.append(case(
+            "W1b: bold interno em quote multi-linha segue NÃO sendo malformada",
+            not any(f["status"] == "atribuicao_malformada" for f in verify(
+                '> "Ele disse que o **ônus da prova** é do deck\n'
+                '> e ninguém contestou." — **The Unit Economist** (lente simulada · X)\n', cells))))
+
+        # ---- W2: falsos vermelhos que ensinam o usuário a ignorar o gate ----
+        # Gate que dá vermelho em texto correto é pior que gate ausente: o usuário aprende
+        # a passar por cima, e aí o vermelho de verdade também passa.
+        results.append(case(
+            "W2a: ênfase comum do português em prosa não vira atribuição",
+            not verify("O time discutiu — **muito** — o roadmap do trimestre.\n", cells)))
+        results.append(case(
+            "W2b: travessão + bold no meio de frase em prosa não vira atribuição",
+            not verify("A régua — **a nossa régua** — mudou no meio do trimestre.\n",
+                       cells)))
+        # blockquote indentado é markdown válido (até 3 espaços); hoje vira "prosa"
+        indentado = ('  > Na economia de tokens, o custo marginal do rigor caiu.\n'
+                     '  > — **The Unit Economist** (lente simulada · X)\n')
+        results.append(case(
+            "W2c: blockquote indentado é tratado como blockquote, não como prosa",
+            not any(f["status"] == "atribuicao_fora_de_quote"
+                    for f in verify(indentado, cells))))
+        # continuação lazy: linha sem '>' dentro do bloco continua a quote (CommonMark)
+        lazy = ('> Na economia de tokens, o custo marginal\n'
+                'do rigor caiu.\n'
+                '> — **The Unit Economist** (lente simulada · X)\n')
+        results.append(case(
+            "W2d: continuação lazy não parte a quote em pedaço curto demais",
+            not any(f["status"] == "curta_nao_verificavel" for f in verify(lazy, cells))))
+
         print(f"{sum(results)}/{len(results)} testes ok")
         return 0 if all(results) else 1
     finally:

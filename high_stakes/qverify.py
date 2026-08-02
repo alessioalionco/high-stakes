@@ -94,16 +94,42 @@ def cell_corpus(cells_dir: Path) -> dict[str, list[str]]:
     return corpus
 
 
+def _linhas_de_quote(report_md: str):
+    """Itera (é_quote, corpo) por linha, resolvendo as duas formas de blockquote que o
+    `startswith(">")` cru não enxergava e que davam VERMELHO em documento correto:
+
+      · indentação de até 3 espaços (markdown válido; 4+ já é bloco de código);
+      · continuação lazy (CommonMark): dentro de um blockquote, linha não-vazia sem `>`
+        continua a citação. Sem isto a quote era partida e o pedaço virava
+        `curta_nao_verificavel`.
+
+    Mora aqui, e não duplicado, porque `_joined_quotes` e `_malformed_attributions`
+    precisam concordar sobre o que é blockquote — se divergirem, uma quote é extraída por
+    um e considerada prosa pelo outro, e o relatório se contradiz.
+    """
+    dentro = False
+    for ln in report_md.splitlines():
+        despido = re.sub(r"^ {0,3}", "", ln)  # até 3 espaços; 4+ é bloco de código
+        eh_quote = despido.startswith(">")
+        if not eh_quote and dentro and ln.strip():
+            eh_quote, despido = True, "> " + ln.strip()
+        if eh_quote:
+            dentro = True
+            yield True, despido.lstrip("> ").rstrip()
+        else:
+            dentro = False
+            yield False, ln
+
+
 def _joined_quotes(report_md: str) -> list[tuple[str, str]]:
     """[(texto_da_quote, nome_atribuído)] — junta blockquote multi-linha; atribuição só no
     fim de linha (travessão+bold interno é conteúdo)."""
     out = []
     buf: list[str] = []
-    for ln in report_md.splitlines():
-        if not ln.startswith(">"):
+    for eh_quote, body in _linhas_de_quote(report_md):
+        if not eh_quote:
             buf = []
             continue
-        body = ln.lstrip("> ").rstrip()
         m = ATTRIB_END_RE.search(body)
         if m:
             text = " ".join(buf + [body[:m.start()]])
@@ -185,25 +211,42 @@ def _malformed_attributions(report_md: str) -> list[tuple[str, str]]:
     enquanto qualquer quote legítima no documento mantinha `findings` não-vazio.
     """
     ruins: list[tuple[str, str]] = []
-    bloco: list[str] = []
+    segmento: list[str] = []   # a quote CORRENTE, não o bloco inteiro
 
-    def fecha(b: list[str]) -> None:
-        if not b:
+    def fecha(seg: list[str]) -> None:
+        """Julga UMA quote. Por bloco, uma atribuição válida lavava a malformada ao lado.
+
+        O gate era por bloco porque uma quote legítima de duas linhas com bold interno
+        tinha a 1ª linha acusada de malformada. Mas um blockquote pode conter VÁRIAS
+        quotes, e por bloco bastava uma atribuição estrita em qualquer linha para o bloco
+        inteiro passar — a segunda, malformada, sumia. Fail-open num gate cujo trabalho
+        é impedir que frase inventada saia com nome de gente real em cima.
+        Por SEGMENTO resolve os dois: o bold interno continua sendo conteúdo do segmento
+        que termina em atribuição estrita, e o segmento que não termina em atribuição
+        estrita é julgado sozinho.
+        """
+        if not seg:
             return
-        tem_frouxa = any(ATTRIB_LOOSE_RE.search(l) for l in b)
-        tem_estrita = any(ATTRIB_END_RE.search(l.lstrip("> ").rstrip()) for l in b)
-        if tem_frouxa and not tem_estrita:
-            ruins.append(("atribuicao_malformada", b[-1].strip()))
+        if any(ATTRIB_LOOSE_RE.search(l) for l in seg):
+            ruins.append(("atribuicao_malformada", seg[-1].strip()))
 
-    for ln in report_md.splitlines():
-        if ln.startswith(">"):
-            bloco.append(ln)
+    for eh_quote, corpo in _linhas_de_quote(report_md):
+        if eh_quote:
+            segmento.append(corpo)
+            if ATTRIB_END_RE.search(corpo):
+                segmento = []   # quote fechada por atribuição estrita: em ordem
             continue
-        fecha(bloco); bloco = []
-        if ATTRIB_LOOSE_RE.search(ln):
-            # atribuição em PROSA: tipografia de citação sem ser citação
+
+        ln = corpo
+        fecha(segmento); segmento = []
+        # Atribuição em PROSA: tipografia de citação sem ser citação. Ancorada no FIM da
+        # linha, como uma atribuição de verdade — o `ATTRIB_LOOSE_RE` solto casava com
+        # ênfase comum do português no MEIO da frase ("discutiu — **muito** — o roadmap")
+        # e dava vermelho em texto correto. Gate que erra assim ensina a ser ignorado, e
+        # aí o vermelho de verdade passa junto.
+        if ATTRIB_END_RE.search(ln.rstrip()):
             ruins.append(("atribuicao_fora_de_quote", ln.strip()))
-    fecha(bloco)
+    fecha(segmento)
     return ruins
 
 
