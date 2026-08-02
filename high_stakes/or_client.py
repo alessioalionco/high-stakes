@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import math
 import os
 import threading
 import time
@@ -167,8 +168,16 @@ class BudgetLedger:
     def _read_disk(self) -> dict:
         """{spent_usd, calls, reservations} do disco, saneado. Ledger ilegível não
         aborta o run: avisa e trata como zerado (o cap segue valendo daí pra frente)."""
+        def _sem_nao_finito(nome):
+            # `json.loads` aceita os literais NaN/Infinity por default. Um ledger com
+            # NaN nao "parece" corrompido: ele carrega, e a partir dai TODA comparacao
+            # de teto vira no-op (`nan > cap` e False). Recusar no parse e a primeira
+            # das duas redes; a segunda e o isfinite em cada numero, abaixo.
+            raise ValueError(f"literal nao-finito no ledger: {nome}")
+
         try:
-            raw = json.loads(self._ledger_path.read_text())
+            raw = json.loads(self._ledger_path.read_text(),
+                             parse_constant=_sem_nao_finito)
         except (json.JSONDecodeError, OSError) as e:
             if self._ledger_path.exists() and self._ledger_path.stat().st_size > 0:
                 # FAIL CLOSED. Tratar ledger ilegível como "gasto zero" devolvia o cap
@@ -181,8 +190,19 @@ class BudgetLedger:
                     "Inspecione o arquivo e, se o gasto for aceitável, apague-o "
                     "explicitamente para recomeçar do zero.") from e
             raw = {}  # ausente ou vazio = run novo, legítimo
-        except ValueError:
+        except ValueError as e:
+            # ValueError aqui e o literal nao-finito (ou JSON invalido que escapou do
+            # ramo acima). Zerar seria devolver o cap inteiro -> fail-closed.
+            if self._ledger_path.exists() and self._ledger_path.stat().st_size > 0:
+                raise LedgerCorrupted(
+                    f"ledger em {self._ledger_path} tem numero nao-finito ou JSON "
+                    f"invalido ({e}). Gasto desconhecido: nenhum dispatch e seguro."
+                ) from e
             raw = {}
+        if not isinstance(raw, dict):
+            raise LedgerCorrupted(
+                f"ledger em {self._ledger_path} nao e um objeto JSON "
+                f"({type(raw).__name__}) — estado ilegivel, fail-closed.")
         # AUSENTE é run novo; PRESENTE-E-PODRE é corrupção. O fail-closed só cobria JSON
         # ilegível, e entrava pela outra porta: `{"spent_usd": "muito"}` e
         # `{"spent_usd": null}` parseiam como JSON, caíam no `except`/no `or 0.0`, viravam
@@ -196,7 +216,8 @@ class BudgetLedger:
             if v is _AUSENTE:
                 return conv(0)  # nunca gravado ainda: run novo
             # bool é subclasse de int em Python: `True` viraria 1.0 caladamente.
-            if isinstance(v, bool) or not isinstance(v, (int, float)):
+            if (isinstance(v, bool) or not isinstance(v, (int, float))
+                    or not math.isfinite(v)):
                 raise LedgerCorrupted(
                     f"ledger em {self._ledger_path} tem {chave}={v!r} "
                     f"({type(v).__name__}) onde devia haver número. O gasto acumulado é "
@@ -230,6 +251,11 @@ class BudgetLedger:
                 raise LedgerCorrupted(
                     f"ledger em {self._ledger_path}: reserva {k!r} com número ilegível "
                     f"({v!r}).") from e
+            if not (math.isfinite(usd) and math.isfinite(ts)):
+                raise LedgerCorrupted(
+                    f"ledger em {self._ledger_path}: reserva {k!r} com valor "
+                    f"nao-finito ({v!r}). Reserva NaN some do somatorio e devolve o "
+                    "dinheiro em voo ao cap.")
             if usd > 0 and now - ts < RESERVATION_TTL_S:  # descarta órfã de processo morto
                 res[k] = {"usd": usd, "ts": ts}
         try:
@@ -246,6 +272,8 @@ class BudgetLedger:
         diferentes no mesmo run davam cap efetivo = o MAIOR. Quem abriu com $5 achava que
         o teto era $5 enquanto o outro gastava $50 no mesmo ledger."""
         dc = disk.get("cap_usd")
+        if dc is not None and not math.isfinite(dc):
+            dc = None  # cap nao-finito no disco nao e teto: e ausencia de teto
         if dc is None or dc <= 0:
             return self.cap_usd
         if dc != self.cap_usd:
@@ -339,7 +367,10 @@ class BudgetLedger:
         os próximos dispatches (a reserva-estimativa pode subestimar o real)."""
         # Mesma classe do sentinela -1/-1 do catálogo: custo REAL negativo vindo
         # do provider deflacionaria o spent e inflaria o cap. Nunca é legítimo.
-        if real_usd < 0:
+        if not math.isfinite(real_usd) or real_usd < 0:
+            # Mesma familia do sentinela negativo, e pior: `nan > cap` e False, entao
+            # um custo NaN nao deflaciona -- ele DESLIGA o teto, e o gasto vira NaN
+            # para sempre. Conservador nos dois casos: vale a reserva.
             real_usd = est_usd  # conservador: mantém a reserva como gasto
         with self._lock:
             self._reserved = max(0.0, self._reserved - est_usd)
@@ -465,6 +496,13 @@ class ORClient:
                 "recusando dispatch (fail-closed; sem estimativa não há cap)."
             )
         in_price, out_price = self._price(model)
+        if not (math.isfinite(in_price) and math.isfinite(out_price)):
+            # O catalogo vem do provedor. "nan"/"Infinity" viram float sem reclamar, e
+            # dai a estimativa inteira e nao-finita: a reserva passa (nan > cap e
+            # False) e o cap deixa de existir para essa chamada.
+            raise RuntimeError(
+                f"modelo {model!r} com pricing nao-finito no catalogo "
+                f"(prompt={in_price}, completion={out_price}) — recusando dispatch.")
         if in_price < 0 or out_price < 0:
             # Sentinela do catálogo (ex.: openrouter/fusion publica -1/-1): estimativa
             # negativa vira reserva negativa -> o cap deixa de existir e charge_failure
@@ -562,11 +600,16 @@ class ORClient:
             self.ledger.charge_failure(est)
             # e o que JÁ FOI GERADO nas tentativas anteriores também foi cobrado lá
             # em cima. Sem isto o ledger subconta o fracasso em até MAX_RETRIES vezes.
-            ja_geradas = contagem.get("geradas", 0)
-            if ja_geradas:
-                print(f"[ledger] {ja_geradas} tentativa(s) já gerada(s) antes do "
-                      f"fracasso — cobrando ${est * ja_geradas:.4f} além da estimativa.")
-                self.ledger.charge_extra(est * ja_geradas)
+            # `charge_failure` acima JA cobrou UMA estimativa (e e ele quem solta a
+            # reserva). Somar `est * geradas` por cima cobrava est*(geradas+1): 5
+            # estimativas para 4 tentativas. O total certo e uma estimativa por
+            # tentativa que gerou, com o piso de uma (houve dispatch, pode ter sido
+            # cobrado mesmo sem produzir) -- entao aqui entra so o EXCEDENTE.
+            excedente = max(0, contagem.get("geradas", 0) - 1)
+            if excedente:
+                print(f"[ledger] {excedente} geração(ões) além da já contabilizada — "
+                      f"cobrando ${est * excedente:.4f} a mais.")
+                self.ledger.charge_extra(est * excedente)
             raise
 
         usage = data.get("usage", {}) or {}
@@ -579,6 +622,11 @@ class ORClient:
                 + usage.get("completion_tokens", 0) * out_price
             )
         cost = float(cost or 0.0)
+        if not math.isfinite(cost):
+            # `usage.cost` vem do provedor. Nao-finito aqui envenena o ledger inteiro.
+            print(f"[ledger] custo nao-finito ({cost}) reportado para {model} — "
+                  f"usando a estimativa ${est:.4f} (conservador).")
+            cost = est
         if geradas:
             # tentativas anteriores rodaram no provedor: estimativa cada, senão o gasto
             # real fica até 4x acima do que o ledger conhece.

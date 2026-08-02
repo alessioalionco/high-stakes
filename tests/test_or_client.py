@@ -13,6 +13,7 @@ bom, gastando 2x):
         não debitar, o cap superestima o orçamento restante.
 """
 import json
+import math
 import os
 import subprocess
 import sys
@@ -23,7 +24,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 from high_stakes import or_client
-from high_stakes.or_client import BudgetExceeded, BudgetLedger, ORClient
+from high_stakes.or_client import (BudgetExceeded, BudgetLedger,
+                                   LedgerCorrupted, ORClient)
 import urllib.request
 
 from high_stakes import http_client
@@ -429,6 +431,69 @@ def main() -> int:
         led9.reconcile(1.0, -5.0)
         case("custo REAL negativo não deflaciona o gasto", abs(led9.spent - 1.0) < 1e-9)
 
+        # ================== NaN: O NÚMERO QUE DESLIGA O TETO ==================
+        # Achado no review adversarial e reproduzido antes de virar teste. `nan > cap` é
+        # False, então TODA comparação de teto vira no-op quando um não-finito entra. E o
+        # `max(0.0, nan)` do clamp devolve 0.0 — um ledger com spent_usd NaN carrega como
+        # gasto ZERO e o run inteiro recupera o orçamento. Pior tipo de bug deste arquivo:
+        # não quebra nada, não loga nada, só desliga a trava.
+        nan, inf = float("nan"), float("inf")
+
+        # A invariante NÃO é "levanta" — é que o teto continua existindo. O tratamento
+        # certo é o conservador (vale a reserva), igual ao do custo negativo. Escrevi
+        # este caso esperando exceção e o código estava certo, não o teste.
+        led_nan = BudgetLedger(cap_usd=1.0, persist=False)
+        led_nan.reserve(0.5)
+        led_nan.reconcile(0.5, nan)   # custo REAL não-finito vindo do provedor
+        case("N1: custo NaN vira a estimativa (conservador), não NaN",
+             math.isfinite(led_nan.spent) and abs(led_nan.spent - 0.5) < 1e-9)
+        led_nan.reserve(0.4)          # 0.5 + 0.4 = 0.9 < 1.0, ainda cabe
+        try:
+            led_nan.reserve(0.3)      # 0.9 + 0.3 = 1.2 > 1.0
+            case("N1b: o teto SEGUE valendo depois de um custo NaN", False)
+        except BudgetExceeded:
+            case("N1b: o teto SEGUE valendo depois de um custo NaN", True)
+
+        # NaN no disco: `json.loads` aceita o literal NaN sem reclamar.
+        for texto, desc in [('{"spent_usd": NaN, "calls": 1, "reservations": {}}', "spent NaN"),
+                            ('{"spent_usd": Infinity, "calls": 1, "reservations": {}}',
+                             "spent Infinity"),
+                            ('{"spent_usd": 1.0, "calls": 1, "cap_usd": NaN, '
+                             '"reservations": {}}', "cap NaN"),
+                            ('{"spent_usd": 1.0, "calls": 1, "reservations": '
+                             '{"x": {"usd": NaN, "ts": 1}}}', "reserva NaN")]:
+            lpn = tmp / f"nan-{desc.replace(' ', '-')}.json"
+            lpn.write_text(texto)
+            try:
+                l_ = BudgetLedger(cap_usd=15.0, persist=True, ledger_path=lpn)
+                case(f"N2: ledger com {desc} falha FECHADA (não zera o gasto)",
+                     False if desc.startswith("spent") else math.isfinite(l_.spent))
+            except LedgerCorrupted:
+                case(f"N2: ledger com {desc} falha FECHADA (não zera o gasto)", True)
+
+        # N2b — o `parse_constant` e o `isfinite` parecem redundantes e não são. O
+        # isfinite só olha os campos que eu validei (spent_usd, calls, reservas); o
+        # parse_constant recusa o literal NaN em QUALQUER campo, inclusive um que só
+        # exista no futuro. Sem ele, um NaN entra no dict e espera alguém ler.
+        lp_x = tmp / "nan-campo-desconhecido.json"
+        lp_x.write_text('{"spent_usd": 1.0, "calls": 1, "reservations": {}, '
+                        '"campo_novo_qualquer": NaN}')
+        try:
+            BudgetLedger(cap_usd=15.0, persist=True, ledger_path=lp_x)
+            case("N2b: NaN em campo NÃO validado ainda é recusado (parse_constant)", False)
+        except LedgerCorrupted:
+            case("N2b: NaN em campo NÃO validado ainda é recusado (parse_constant)", True)
+
+        # e o pricing do catálogo, que é a outra porta de entrada de número do provedor
+        c_nan = ORClient(ledger=BudgetLedger(cap_usd=5.0, persist=False),
+                         api_key="k", outputs_dir=tmp / "nanprice")
+        c_nan._catalog = {"nan/model": {"pricing": {"prompt": "nan", "completion": "1"}}}
+        try:
+            c_nan._estimate("nan/model", [{"role": "user", "content": "x"}], 10)
+            case("N3: pricing não-finito no catálogo é fail-closed", False)
+        except RuntimeError:
+            case("N3: pricing não-finito no catálogo é fail-closed", True)
+
         # ============ CAMINHO DO DINHEIRO: RETRY, COBRANÇA E RESPOSTA PAGA ============
 
         # M1 (#3) — 429 no corpo NÃO é geração. `geradas` conta toda `_Retriable`, e o
@@ -460,8 +525,12 @@ def main() -> int:
             cf.chat("test/model", [{"role": "user", "content": "oi"}], max_tokens=10)
         except Exception:
             pass
-        case("M2: retry esgotado cobra TODAS as gerações, não só uma estimativa",
-             led_f.spent >= est_f * or_client.MAX_RETRIES - 1e-9)
+        # IGUALDADE, não `>=`. O `>=` que eu tinha escrito aqui deixava passar o
+        # resultado ERRADO: com charge_failure + charge_extra somando est*(geradas+1),
+        # o total era 5 estimativas para 4 tentativas e o teste passava feliz. Um teste
+        # de cobrança que aceita "pelo menos X" não testa cobrança — testa que houve.
+        case("M2: retry esgotado cobra EXATAMENTE uma estimativa por geração",
+             abs(led_f.spent - est_f * or_client.MAX_RETRIES) < 1e-9)
 
         # M3 (#5) — resposta JÁ PAGA não pode sumir quando o cap estoura. O
         # `reconcile` levanta BudgetExceeded depois de a chamada ter sido cobrada; se a
@@ -566,7 +635,6 @@ def main() -> int:
         # `{"spent_usd": null}` parseiam, caem no `except (TypeError, ValueError)` /
         # no `or 0.0`, viram 0.0 em silêncio — e devolvem o cap INTEIRO. É o mesmo
         # fail-open que o LedgerCorrupted existe para fechar, entrando pela outra porta.
-        from high_stakes.or_client import LedgerCorrupted
         for lixo, desc in [('{"spent_usd": "muito", "calls": 1}', "string"),
                            ('{"spent_usd": null, "calls": 1}', "null"),
                            ('{"spent_usd": [1,2], "calls": 1}', "lista"),
