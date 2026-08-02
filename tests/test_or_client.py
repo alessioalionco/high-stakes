@@ -411,6 +411,120 @@ def main() -> int:
         led9.reconcile(1.0, -5.0)
         case("custo REAL negativo não deflaciona o gasto", abs(led9.spent - 1.0) < 1e-9)
 
+        # ================== LOTE QUE FOI ANUNCIADO E NUNCA APLICADO ==================
+        # Três correções que eu reportei como feitas e não estavam no arquivo: o script
+        # que as aplicaria abortou no primeiro assert e o write nunca rodou. Estas são as
+        # red tests que deveriam ter existido na primeira vez — um teste teria denunciado
+        # o anúncio falso na hora.
+
+        # ---- L1: o cap EFETIVO tem de ser o que fica no disco ----
+        # _effective_cap já existia e era calculado num lugar só (o ramo lento do
+        # reserve), e _write_disk gravava self.cap_usd por cima. Efeito: o piso do run
+        # sobe. Processo com cap $5 fixa o teto do run em $5; um processo com cap $50
+        # entra, respeita o $5 para si (min), mas GRAVA $50 — e o próximo processo lê $50
+        # como se fosse o teto do run. O cap volta a ser por-processo, que é exatamente o
+        # que o T4 existe para impedir.
+        lp = tmp / "cap-efetivo.json"
+        baixo = BudgetLedger(cap_usd=5.0, persist=True, ledger_path=lp)
+        baixo.reserve(1.0)
+        baixo.reconcile(1.0, 1.0)
+        alto = BudgetLedger(cap_usd=50.0, persist=True, ledger_path=lp)
+        alto.reserve(1.0)
+        alto.reconcile(1.0, 1.0)
+        no_disco = json.loads(lp.read_text())["cap_usd"]
+        case("L1: cap gravado no disco é o EFETIVO (o menor), não o da instância",
+             abs(no_disco - 5.0) < 1e-9)
+        terceiro = BudgetLedger(cap_usd=100.0, persist=True, ledger_path=lp)
+        try:
+            terceiro.reserve(10.0)   # já gastou 2; 2+10=12 > piso do run (5)
+            case("L1: terceiro processo herda o piso do run, não o teto inflado", False)
+        except BudgetExceeded:
+            case("L1: terceiro processo herda o piso do run, não o teto inflado", True)
+
+        # L1c: o cap efetivo tem de mandar no RECONCILE também, não só no reserve.
+        # Achado por mutação: trocar `self._cap_efetivo` por `self.cap_usd` no reconcile
+        # não derrubava teste nenhum. É o ponto onde o custo REAL (que pode passar da
+        # estimativa) interrompe o run — usar o cap da instância ali deixa um processo
+        # de cap alto seguir gastando acima do piso que o run já fixou.
+        lp_r = tmp / "cap-reconcile.json"
+        BudgetLedger(cap_usd=5.0, persist=True, ledger_path=lp_r)._commit(0.0, 0)
+        folgado = BudgetLedger(cap_usd=50.0, persist=True, ledger_path=lp_r)
+        folgado.reserve(1.0)
+        try:
+            folgado.reconcile(1.0, 6.0)  # real 6 > piso do run (5), < cap da instância (50)
+            case("L1c: reconcile interrompe pelo cap EFETIVO, não pelo da instância", False)
+        except BudgetExceeded:
+            case("L1c: reconcile interrompe pelo cap EFETIVO, não pelo da instância", True)
+
+        # ---- L2: ledger que PARSEIA mas tem lixo tipado é corrupção, não run novo ----
+        # O fail-closed só cobria JSON ilegível. `{"spent_usd": "muito"}` e
+        # `{"spent_usd": null}` parseiam, caem no `except (TypeError, ValueError)` /
+        # no `or 0.0`, viram 0.0 em silêncio — e devolvem o cap INTEIRO. É o mesmo
+        # fail-open que o LedgerCorrupted existe para fechar, entrando pela outra porta.
+        from high_stakes.or_client import LedgerCorrupted
+        for lixo, desc in [('{"spent_usd": "muito", "calls": 1}', "string"),
+                           ('{"spent_usd": null, "calls": 1}', "null"),
+                           ('{"spent_usd": [1,2], "calls": 1}', "lista"),
+                           ('{"spent_usd": true, "calls": 1}', "bool"),
+                           ('{"spent_usd": 1.0, "calls": "dois"}', "calls string")]:
+            lp2 = tmp / f"lixo-{desc.replace(' ', '-')}.json"
+            lp2.write_text(lixo)
+            try:
+                BudgetLedger(cap_usd=5.0, persist=True, ledger_path=lp2)
+                case(f"L2: ledger com {desc} no lugar do número falha FECHADA", False)
+            except LedgerCorrupted:
+                case(f"L2: ledger com {desc} no lugar do número falha FECHADA", True)
+        # L2c: reserva MALFORMADA é corrupção; reserva VENCIDA é órfã. A diferença
+        # importa porque descartar uma reserva devolve o orçamento dela ao cap — some
+        # dinheiro em voo da conta. Também achado por mutação: neutralizar a checagem
+        # não derrubava nada, porque todo teste de reserva usava entrada bem-formada.
+        for lixo, desc in [('{"spent_usd": 1.0, "reservations": {"x": "nao-e-dict"}}',
+                            "reserva que não é objeto"),
+                           ('{"spent_usd": 1.0, "reservations": {"x": {"usd": 2.0}}}',
+                            "reserva sem ts"),
+                           ('{"spent_usd": 1.0, "reservations": {"x": {"usd": "abc", "ts": 1}}}',
+                            "reserva com usd ilegível"),
+                           ('{"spent_usd": 1.0, "reservations": "nao-e-objeto"}',
+                            "reservations que não é objeto")]:
+            lpr = tmp / f"res-{desc.replace(' ', '-')}.json"
+            lpr.write_text(lixo)
+            try:
+                BudgetLedger(cap_usd=5.0, persist=True, ledger_path=lpr)
+                case(f"L2c: {desc} falha FECHADA (não devolve orçamento ao cap)", False)
+            except LedgerCorrupted:
+                case(f"L2c: {desc} falha FECHADA (não devolve orçamento ao cap)", True)
+
+        # e o caso legítimo continua legítimo: ausente/vazio = run novo
+        lp3 = tmp / "novo.json"
+        try:
+            led_novo = BudgetLedger(cap_usd=5.0, persist=True, ledger_path=lp3)
+            case("L2: ledger ausente segue sendo run novo (não é corrupção)",
+                 led_novo.spent == 0.0)
+        except LedgerCorrupted:
+            case("L2: ledger ausente segue sendo run novo (não é corrupção)", False)
+
+        # ---- L3: extra_body por ALLOWLIST, não denylist de 5 chaves ----
+        # A denylist barrava model/messages/max_tokens/stream/usage e deixava passar
+        # `models` (lista de fallback — TROCA qual modelo cobra), `provider` (rota e
+        # preço), `route`, e `n` (multiplica a geração e a fatura). Todos entram no
+        # payload DEPOIS da estimativa que reservou o orçamento, então o cap é furado por
+        # fator arbitrário sem erro nenhum. cells.py encaminha `request` vindo da tarefa:
+        # é alcançável por dado comum, não só por malícia.
+        c_ab = ORClient(ledger=BudgetLedger(cap_usd=5.0, persist=False),
+                        api_key="k", outputs_dir=tmp / "ab")
+        for chave, valor in [("models", ["openai/gpt-5.6"]), ("provider", {"order": ["x"]}),
+                             ("route", "fallback"), ("n", 4),
+                             ("max_completion_tokens", 99999)]:
+            try:
+                c_ab.chat("z/m", [{"role": "user", "content": "oi"}],
+                          extra_body={chave: valor})
+                case(f"L3: extra_body rejeita {chave!r} (troca modelo/rota/volume)", False)
+            except ValueError:
+                case(f"L3: extra_body rejeita {chave!r} (troca modelo/rota/volume)", True)
+            except Exception:
+                # qualquer outra exceção significa que passou da validação
+                case(f"L3: extra_body rejeita {chave!r} (troca modelo/rota/volume)", False)
+
         print(f"{sum(results)}/{len(results)} testes ok")
         return 0 if all(results) else 1
     finally:

@@ -8,10 +8,12 @@ Responsabilidades:
   - chat(model, messages, ...) -> dict com {text, usage, cost_usd, provider, raw}.
   - Custo via `usage.cost` do OpenRouter (pega o custo de busca interna do sonar,
     que NÃO aparece no token-math). Fallback = pricing do catalog-snapshot.
-  - Budget cap HARD reserve-then-reconcile [D1+D3]: pré-debita o teto estimado
-    ANTES do dispatch; se reservado > CAP -> levanta BudgetExceeded antes de
-    mandar a request. Pós-resposta reconcilia reservado -> custo real. Protege
-    mesmo com N calls em voo (overshoot = 0). Lição Fugu.
+  - Budget cap reserve-then-reconcile [D1+D3]: pré-debita o teto ESTIMADO ANTES
+    do dispatch; se reservado > cap -> levanta BudgetExceeded antes de mandar a
+    request. Pós-resposta reconcilia reservado -> custo real. Vale entre processos
+    (reservas em voo são persistidas) e o teto de um run só DESCE, nunca sobe.
+    **Best-effort, não "hard"**: a estimativa pode subestimar o custo real, e o
+    que a interrompe é o reconcile — depois de a chamada já ter sido paga.
   - Retry com backoff em 429/5xx, honra Retry-After.
   - catalog-snapshot na 1ª chamada (reprodutibilidade).
   - Key lida de .env (nunca hardcoded, nunca logada).
@@ -139,6 +141,12 @@ class BudgetLedger:
     def __init__(self, cap_usd: float = DEFAULT_CAP_USD, persist: bool = True,
                  ledger_path: Path | None = None):
         self.cap_usd = cap_usd
+        # O teto que VALE. `cap_usd` é o que ESTA instância pediu; o efetivo é o menor
+        # entre ele e o que o run já registrou no disco, e é ele que manda em toda
+        # decisão de gasto. Existiam separados porque `_effective_cap` era calculado
+        # num lugar só (o ramo lento do reserve) e jogado fora em todos os outros —
+        # inclusive no write, que gravava `cap_usd` por cima e SUBIA o piso do run.
+        self._cap_efetivo = cap_usd
         self._reserved = 0.0
         self._spent = 0.0
         self._calls = 0
@@ -153,6 +161,7 @@ class BudgetLedger:
                 d = self._read_disk()
                 self._spent = d["spent_usd"]
                 self._calls = d["calls"]
+                self._cap_efetivo = self._effective_cap(d)
 
     # ---- disco (SEMPRE chamado sob _file_lock) ----
     def _read_disk(self) -> dict:
@@ -174,20 +183,53 @@ class BudgetLedger:
             raw = {}  # ausente ou vazio = run novo, legítimo
         except ValueError:
             raw = {}
-        try:  # ledger pré-fix pode ter spend negativo (sentinela -1/-1 do catálogo)
-            spent = max(0.0, float(raw.get("spent_usd", 0.0) or 0.0))
-        except (TypeError, ValueError):
-            spent = 0.0
-        try:
-            calls = int(raw.get("calls", 0) or 0)
-        except (TypeError, ValueError):
-            calls = 0
+        # AUSENTE é run novo; PRESENTE-E-PODRE é corrupção. O fail-closed só cobria JSON
+        # ilegível, e entrava pela outra porta: `{"spent_usd": "muito"}` e
+        # `{"spent_usd": null}` parseiam como JSON, caíam no `except`/no `or 0.0`, viravam
+        # 0.0 em silêncio — e devolviam o CAP INTEIRO. É o mesmo fail-open que o
+        # LedgerCorrupted existe para fechar. Zero por ausência é legítimo; zero por
+        # "não consegui ler o número" nunca é.
+        _AUSENTE = object()
+
+        def _numero(chave, conv):
+            v = raw.get(chave, _AUSENTE)
+            if v is _AUSENTE:
+                return conv(0)  # nunca gravado ainda: run novo
+            # bool é subclasse de int em Python: `True` viraria 1.0 caladamente.
+            if isinstance(v, bool) or not isinstance(v, (int, float)):
+                raise LedgerCorrupted(
+                    f"ledger em {self._ledger_path} tem {chave}={v!r} "
+                    f"({type(v).__name__}) onde devia haver número. O gasto acumulado é "
+                    "desconhecido, então nenhum dispatch é seguro. Inspecione o arquivo "
+                    "e, se o gasto for aceitável, apague-o explicitamente.")
+            return conv(v)
+
+        # negativo é outra história: ledger pré-fix tem o sentinela -1/-1 do catálogo.
+        # É número, foi lido, e o conservador é tratar como zero — não como corrupção.
+        spent = max(0.0, _numero("spent_usd", float))
+        calls = max(0, _numero("calls", int))
         res, now = {}, time.time()
-        for k, v in (raw.get("reservations") or {}).items():
+        reservas = raw.get("reservations", _AUSENTE)
+        if reservas is _AUSENTE or reservas is None:
+            reservas = {}
+        if not isinstance(reservas, dict):
+            raise LedgerCorrupted(
+                f"ledger em {self._ledger_path} tem reservations={type(reservas).__name__} "
+                "onde devia haver objeto. Reserva em voo de outro processo é o que impede "
+                "dois runs de gastarem o mesmo dinheiro; ilegível = não despacha.")
+        for k, v in reservas.items():
+            # entrada MALFORMADA é corrupção (some do cálculo e AFROUXA o cap);
+            # entrada bem-formada e VENCIDA é órfã de processo morto, e essa se descarta.
+            if not isinstance(v, dict) or "usd" not in v or "ts" not in v:
+                raise LedgerCorrupted(
+                    f"ledger em {self._ledger_path}: reserva {k!r} malformada ({v!r}). "
+                    "Descartá-la em silêncio devolveria o orçamento dela ao cap.")
             try:
                 usd, ts = float(v["usd"]), float(v["ts"])
-            except (TypeError, ValueError, KeyError, IndexError):
-                continue
+            except (TypeError, ValueError) as e:
+                raise LedgerCorrupted(
+                    f"ledger em {self._ledger_path}: reserva {k!r} com número ilegível "
+                    f"({v!r}).") from e
             if usd > 0 and now - ts < RESERVATION_TTL_S:  # descarta órfã de processo morto
                 res[k] = {"usd": usd, "ts": ts}
         try:
@@ -211,11 +253,20 @@ class BudgetLedger:
                   f"instância pediu ${self.cap_usd:.2f} — vale o MENOR.")
         return min(self.cap_usd, dc)
 
-    def _write_disk(self, spent: float, calls: int, reservations: dict) -> None:
+    def _write_disk(self, spent: float, calls: int, reservations: dict,
+                    cap: float | None = None) -> None:
+        """Grava o estado do run. `cap` é o teto EFETIVO — nunca `self.cap_usd`.
+
+        Gravar o cap da instância era o bug: o piso do run SOBE. Processo A com cap $5
+        fixa o teto do run em $5; processo B com cap $50 entra, respeita o $5 para si
+        (o min), mas grava $50 — e o processo C seguinte lê $50 como se fosse o teto do
+        run. O cap volta a ser por-processo, que é exatamente o que o teto por run
+        existe para impedir. O piso de um run só pode DESCER.
+        """
         payload = json.dumps({
             "spent_usd": round(spent, 6),
             "calls": calls,
-            "cap_usd": self.cap_usd,
+            "cap_usd": self._cap_efetivo if cap is None else cap,
             "reservations": reservations,
         }, indent=2)
         self._ledger_path.parent.mkdir(parents=True, exist_ok=True)
@@ -228,6 +279,7 @@ class BudgetLedger:
         e adota o resultado como verdade. Chamado com self._lock já tomado."""
         with _file_lock(self._lock_path):
             d = self._read_disk()
+            self._cap_efetivo = self._effective_cap(d)  # o piso do run só desce
             # arredonda AQUI, não só na serialização: memória e disco têm de ser o mesmo
             # número, senão o gasto lido por outro processo diverge do local por ~1e-8.
             spent = round(d["spent_usd"] + delta_spent, 6)
@@ -249,7 +301,7 @@ class BudgetLedger:
         with self._lock:
             if not self._persist:
                 projected = self._reserved + self._spent + est_usd
-                if projected > self.cap_usd:
+                if projected > self._cap_efetivo:
                     # `cap` só existe no ramo persistente abaixo. Trocar as duas ocorrências
                     # de uma vez fez este caminho levantar UnboundLocalError em vez de
                     # BudgetExceeded — e 247 testes verdes não pegaram, porque nenhum
@@ -257,7 +309,7 @@ class BudgetLedger:
                     raise BudgetExceeded(
                         f"reserva ${est_usd:.4f} estouraria o cap "
                         f"(spent ${self._spent:.4f} + reserved ${self._reserved:.4f} "
-                        f"+ est = ${projected:.4f} > ${self.cap_usd:.2f})"
+                        f"+ est = ${projected:.4f} > ${self._cap_efetivo:.2f})"
                     )
                 self._reserved += est_usd
                 return
@@ -267,18 +319,19 @@ class BudgetLedger:
                              if k != self._owner)
                 self._spent, self._calls = d["spent_usd"], d["calls"]
                 cap = self._effective_cap(d)
+                self._cap_efetivo = cap
                 projected = d["spent_usd"] + others + self._reserved + est_usd
                 if projected > cap:
                     raise BudgetExceeded(
                         f"reserva ${est_usd:.4f} estouraria o cap "
                         f"(spent ${d['spent_usd']:.4f} + reserved ${self._reserved:.4f} "
                         f"+ outros processos ${others:.4f} "
-                        f"+ est = ${projected:.4f} > ${self.cap_usd:.2f})"
+                        f"+ est = ${projected:.4f} > ${cap:.2f})"
                     )
                 self._reserved += est_usd
                 d["reservations"][self._owner] = {
                     "usd": round(self._reserved, 6), "ts": time.time()}
-                self._write_disk(d["spent_usd"], d["calls"], d["reservations"])
+                self._write_disk(d["spent_usd"], d["calls"], d["reservations"], cap)
 
     def reconcile(self, est_usd: float, real_usd: float) -> None:
         """Solta a reserva e contabiliza o custo real. Se o gasto REAL acumulado
@@ -295,10 +348,10 @@ class BudgetLedger:
             else:
                 self._spent += real_usd
                 self._calls += 1
-            if self._spent > self.cap_usd:
+            if self._spent > self._cap_efetivo:
                 raise BudgetExceeded(
                     f"custo REAL acumulado ${self._spent:.4f} ultrapassou o cap "
-                    f"${self.cap_usd:.2f} — interrompendo próximos dispatches"
+                    f"${self._cap_efetivo:.2f} — interrompendo próximos dispatches"
                 )
 
     def charge_extra(self, usd: float) -> None:
@@ -343,7 +396,8 @@ class BudgetLedger:
                 "spent_usd": round(self._spent, 6),
                 "reserved_usd": round(self._reserved, 6),
                 "calls": self._calls,
-                "cap_usd": self.cap_usd,
+                "cap_usd": self._cap_efetivo,
+                "cap_solicitado_usd": self.cap_usd,
             }
 
 
@@ -442,18 +496,38 @@ class ORClient:
 
         Cap reserve-then-reconcile: reserva o teto estimado ANTES de mandar.
         """
-        # extra_body é aplicado DEPOIS, então deixá-lo trocar `model` ou `max_tokens`
-        # significaria reservar o preço de uma chamada e disparar outra. O cap seria
-        # furado por fator arbitrário, sem erro. cells.py encaminha `request` vindo da
-        # tarefa, então isto é alcançável por dado comum, não só por malícia.
-        _RESERVADAS = {"model", "messages", "max_tokens", "stream", "usage"}
+        # extra_body é aplicado DEPOIS da estimativa, então uma chave que mude O QUE é
+        # despachado faz o motor reservar o preço de uma chamada e disparar outra: o cap
+        # é furado por fator arbitrário, sem erro nenhum. `cells.py` encaminha o `request`
+        # que veio da tarefa, então isto é alcançável por dado comum, não só por malícia.
+        #
+        # Isto era uma DENYLIST de 5 chaves, e denylist aqui é a escolha errada: ela
+        # protege do que alguém lembrou de listar. Passavam batido `models` (lista de
+        # fallback — TROCA qual modelo cobra), `provider` (rota e preço), `route`, `n`
+        # (multiplica a geração e a fatura) e `max_completion_tokens`. Allowlist inverte
+        # o default: chave nova do provedor chega BARRADA e alguém decide, em vez de
+        # chegar liberada e ninguém descobrir.
+        _PERMITIDAS = {
+            # amostragem e formato — não mudam qual modelo roda nem quantas gerações saem
+            "temperature", "top_p", "top_k", "min_p", "top_a", "seed", "stop",
+            "frequency_penalty", "presence_penalty", "repetition_penalty", "logit_bias",
+            "response_format", "structured_outputs",
+            # tool calling
+            "tools", "tool_choice", "parallel_tool_calls",
+            # raciocínio: é o que o roster usa pra desligar reasoning em modelo caro
+            "reasoning", "include_reasoning",
+            # metadados que não afetam custo
+            "user", "metadata", "transforms", "plugins",
+        }
         if extra_body:
-            invasoras = _RESERVADAS & set(extra_body)
-            if invasoras:
+            intrusas = sorted(set(extra_body) - _PERMITIDAS)
+            if intrusas:
                 raise ValueError(
-                    f"extra_body não pode conter {sorted(invasoras)}: esses campos entram "
-                    "na estimativa que reserva o orçamento ANTES do dispatch. Passe-os "
-                    "pelos parâmetros próprios de chat().")
+                    f"extra_body não permite {intrusas}. A estimativa que reserva o "
+                    "orçamento roda ANTES do dispatch, então chave que troque modelo, "
+                    "rota, provedor ou número de gerações fura o cap silenciosamente. "
+                    f"Permitidas: {sorted(_PERMITIDAS)}. Se a chave for realmente "
+                    "inofensiva, adicione-a à allowlist junto com o motivo.")
         est = self._estimate(model, messages, max_tokens)
         self.ledger.reserve(est)  # pode levantar BudgetExceeded -> não dispara
 
