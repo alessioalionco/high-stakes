@@ -6,3 +6,7 @@ high-stakes-runs/
 *.egg-info/
 dist/
 build/
+# destino de escrita DEFAULT do motor (`Path.cwd()/outputs`): ledger de custo,
+# catalog-snapshot, células. Quem rodar a ferramenta da raiz do repo geraria isto
+# aqui — e sem esta linha, commitaria o próprio estado de execução.
+outputs/
