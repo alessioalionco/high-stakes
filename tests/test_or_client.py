@@ -107,6 +107,16 @@ class Handler(BaseHTTPRequestHandler):
                 b"data: [DONE]\n\n"
             )
             return self._send(200, sse_ok, {"Content-Type": "text/event-stream"})
+        if Handler.mode == "so_429_sempre":
+            # 429 limpo no HEADER, em toda tentativa: o provedor DIZ que recusou.
+            # Nada gerado, nada cobrado la em cima.
+            return self._send(429, b"slow down", {"Retry-After": "0"})
+        if Handler.mode == "conteudo_e_dai_429":
+            # conteudo REAL e SO ENTAO o 429 no corpo: foi gerado (e cobrado) antes da
+            # recusa. O codigo do erro sozinho diria "nao cobrar" -- e erraria.
+            body = (b'data: {"choices":[{"delta":{"content":"resposta de verdade"}}]}\n\n'
+                    b'data: {"error":{"code":429,"message":"rate limited"}}\n\n')
+            return self._send(200, body, {"Content-Type": "text/event-stream"})
         if Handler.mode == "custo_nan":
             # o provedor reporta custo NaN no usage: e a outra porta (alem do pricing)
             # por onde um numero nao-finito entra e desliga o teto.
@@ -440,6 +450,57 @@ def main() -> int:
         led9.reserve(1.0)
         led9.reconcile(1.0, -5.0)
         case("custo REAL negativo não deflaciona o gasto", abs(led9.spent - 1.0) < 1e-9)
+
+        # ==== #4 do review: o contador de cobranca errava nos DOIS sentidos ====
+        # A regra antiga olhava o CODIGO do erro. O codigo nao sabe o que aconteceu.
+
+        # G1 — 429 limpo em TODAS as tentativas: o provedor recusou tudo, nada foi
+        # gerado, nada foi cobrado. Antes o caminho de falha cobrava uma estimativa
+        # "por garantia" — inflando o ledger sem um centavo real por tras, o que faz o
+        # motor parar cedo e recusar chamada legitima depois.
+        Handler.mode, Handler.hits = "so_429_sempre", 0
+        led_g1 = BudgetLedger(cap_usd=50.0, persist=False)
+        c_g1 = ORClient(ledger=led_g1, api_key="k", outputs_dir=tmp / "g1")
+        c_g1._catalog = {"test/model": {"pricing": {"prompt": "0.001",
+                                                    "completion": "0.002"}}}
+        try:
+            c_g1.chat("test/model", [{"role": "user", "content": "oi"}], max_tokens=100)
+        except Exception:
+            pass
+        case("G1: 429 limpo em todas as tentativas NAO cobra nada",
+             abs(led_g1.spent) < 1e-9 and Handler.hits == or_client.MAX_RETRIES)
+
+        # G2 — conteudo e SO ENTAO 429 no corpo: gerou antes de recusar, logo cobrou.
+        # A regra por codigo do erro marcaria como nao-cobravel e subcontaria.
+        Handler.mode, Handler.hits = "conteudo_e_dai_429", 0
+        led_g2 = BudgetLedger(cap_usd=50.0, persist=False)
+        c_g2 = ORClient(ledger=led_g2, api_key="k", outputs_dir=tmp / "g2")
+        c_g2._catalog = {"test/model": {"pricing": {"prompt": "0.001",
+                                                    "completion": "0.002"}}}
+        est_g2 = c_g2._estimate("test/model", [{"role": "user", "content": "oi"}], 100)
+        try:
+            c_g2.chat("test/model", [{"role": "user", "content": "oi"}], max_tokens=100)
+        except Exception:
+            pass
+        case("G2: conteudo ANTES do 429 no corpo E cobrado (gerou, logo cobrou)",
+             abs(led_g2.spent - est_g2 * or_client.MAX_RETRIES) < 1e-9)
+
+        # G3 — stream cortado no meio do JSON: nenhum texto e parseado, mas os BYTES
+        # estavam no fio. Medir pelo parse subcontava exatamente a falha mais comum de
+        # streaming numa chamada longa.
+        Handler.mode, Handler.hits = "corta_no_meio", 0
+        led_g3 = BudgetLedger(cap_usd=50.0, persist=False)
+        c_g3 = ORClient(ledger=led_g3, api_key="k", outputs_dir=tmp / "g3")
+        c_g3._catalog = {"test/model": {"pricing": {"prompt": "0.001",
+                                                    "completion": "0.002"}}}
+        est_g3 = c_g3._estimate("test/model", [{"role": "user", "content": "oi"}], 100)
+        try:
+            c_g3.chat("test/model", [{"role": "user", "content": "oi"}], max_tokens=100)
+        except Exception:
+            pass
+        case("G3: stream truncado no meio do JSON conta como cobravel (bytes no fio)",
+             led_g3.spent >= est_g3 - 1e-9)
+        Handler.mode = "ok"
 
         # ---- AUDITORIA POR MUTAÇÃO: duas guardas do dinheiro sem teste ----
         # A1 — `usage.cost` não-finito vindo do provedor. Havia teste para o PRICING do

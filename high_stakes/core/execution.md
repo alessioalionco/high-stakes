@@ -105,6 +105,8 @@ deve ser apresentado como se funcionasse.
 | Brand-blinding imposto | garantir que o mapa `label_to_model` não entre no contexto do Chairman/refutador | montar a visão-de-julgamento com IDs opacos à mão e manter o mapa num arquivo separado — nada verifica que a marca não vazou pro contexto |
 
 **Nota sobre o cap.** O teto de gasto **existe e é código** (reserva antes do disparo,
-contabilidade em disco válida entre processos), mas chamá-lo de *hard* é forte demais: a
-estimativa pode subestimar o custo real, e há furos conhecidos na contabilidade de retry e
-de falha pós-disparo. Leia como **best-effort com teto**, não como garantia.
+contabilidade em disco válida entre processos, e uma tentativa é cobrada quando o provedor
+produziu algo ou o estado ficou ambíguo — recusa explícita não cobra). Ainda assim, chamá-lo
+de *hard* é forte demais: a **estimativa pode subestimar** o custo real, e quem interrompe
+nesse caso é a reconciliação, depois de a chamada já ter sido paga. Leia como **best-effort
+com teto**, não como garantia.

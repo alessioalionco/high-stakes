@@ -653,15 +653,23 @@ class ORClient:
             # contabiliza a ESTIMATIVA como gasto em vez de soltar a reserva.
             print(f"[ledger] call {model} falhou pós-dispatch — estimativa "
                   f"${est:.4f} contabilizada como gasto (conservador).")
-            # UMA estimativa por tentativa que gerou, com piso de uma (houve dispatch,
-            # pode ter sido cobrado mesmo sem produzir). Tudo num commit so: em duas
-            # escritas, entre elas o disco mostra gasto menor que o real e outro
-            # processo reserva em cima disso.
-            excedente = max(0, contagem.get("geradas", 0) - 1)
-            if excedente:
-                print(f"[ledger] +{excedente} geração(ões) anterior(es) — cobrando "
-                      f"${est * (1 + excedente):.4f} no total.")
-            self.ledger.charge_failure(est, extra_usd=est * excedente)
+            # UMA estimativa por tentativa COBRÁVEL — nem mais, nem menos. Cobrável é a
+            # que produziu conteúdo ou morreu em estado desconhecido; a recusa limpa
+            # (429/5xx no header) não é. Se NENHUMA foi cobrável, o provedor recusou
+            # tudo e não há o que pagar: solta a reserva e pronto. Cobrar "uma por
+            # garantia" ali inflava o ledger sem um centavo real por trás, e ledger
+            # inflado faz o motor parar cedo e recusar chamada legítima.
+            # Tudo num commit só: em duas escritas, entre elas o disco mostra gasto
+            # menor que o real e outro processo reserva em cima disso.
+            cobraveis = contagem.get("geradas", 0)
+            if cobraveis:
+                print(f"[ledger] {cobraveis} tentativa(s) cobrável(is) — "
+                      f"${est * cobraveis:.4f} no total.")
+                self.ledger.charge_failure(est, extra_usd=est * (cobraveis - 1))
+            else:
+                print(f"[ledger] o provedor recusou todas as tentativas (nada gerado) "
+                      f"— soltando a reserva de ${est:.4f}.")
+                self.ledger.release(est)
             raise
 
         usage = data.get("usage", {}) or {}
@@ -712,16 +720,19 @@ class ORClient:
     class _Retriable(RuntimeError):
         """Erro transiente (429/5xx, inclusive erro-em-corpo-200) -> retenta.
 
-        `gerou` diz se a tentativa chegou a PRODUZIR no provedor — e portanto se ela foi
-        cobrada lá. Não é detalhe: cada tentativa marcada como gerada cobra uma
-        ESTIMATIVA inteira a mais no ledger. Rate limit (429) é o provedor RECUSANDO;
-        nada foi gerado e nada foi cobrado. Contá-lo como geração inflava o gasto do run
-        sem um centavo real por trás (reproduzido em 6,5×).
+        `recusa` diz se o upstream RECUSOU explicitamente (429 no corpo) — não se ele
+        gerou. A diferença importa: já houve aqui um campo `gerou` decidido pelo código
+        do erro, e ele errava nos dois sentidos. A conta certa combina isto com o que
+        foi medido no fio:
+          · recusa explícita → cobrável só se veio CONTEÚDO antes dela;
+          · qualquer outro fim (truncado, erro de servidor) → cobrável se veio
+            QUALQUER byte, porque chunk truncado no meio do JSON não vira texto mas
+            significa que o provedor já estava gerando.
         """
 
-        def __init__(self, msg: str, gerou: bool = True):
+        def __init__(self, msg: str, recusa: bool = False):
             super().__init__(msg)
-            self.gerou = gerou
+            self.recusa = recusa
 
     def _post_with_retry(
         self, headers: dict, payload: dict, timeout: int,
@@ -738,7 +749,13 @@ class ORClient:
         contagem = {} if contagem is None else contagem
         contagem.setdefault("geradas", 0)
         last_exc: Exception | None = None
-        geradas = 0  # tentativas que chegaram a produzir (e portanto foram cobradas lá)
+        # COBRÁVEL = a tentativa produziu conteúdo (o provedor gerou, logo cobrou) OU
+        # terminou em estado AMBÍGUO (transporte caiu com o stream aberto, 5xx do
+        # servidor). NÃO é cobrável só a recusa explícita: 429 é o provedor dizendo
+        # que não fez. A regra antiga olhava o CÓDIGO do erro e errava nos dois
+        # sentidos: stream que morre depois de 3 chunks não contava (subconta), e
+        # stream vazio que termina sem [DONE] contava (sobreconta).
+        geradas = 0
         for attempt in range(MAX_RETRIES):
             try:
                 resp = self._session.post(
@@ -764,6 +781,14 @@ class ORClient:
                 except Exception as e:  # noqa: BLE001 — corpo ilegível não é terminal
                     detalhe = f"(corpo ilegível: {type(e).__name__})"
                 last_exc = RuntimeError(f"OpenRouter {resp.status_code}: {detalhe}")
+                # 429 e 5xx NÃO são a mesma coisa para a cobrança, e tratá-los
+                # junto foi erro meu que uma regressão pegou:
+                #   429 = o provedor DIZ que recusou. Nada gerado, nada cobrado.
+                #   5xx = erro de servidor. Ele pode ter gerado e falhado ao
+                #         entregar; o estado é AMBÍGUO. Conservador é cobrar.
+                if resp.status_code != 429:
+                    geradas += 1
+                    contagem["geradas"] = geradas
                 retry_after = resp.headers.get("Retry-After")
                 resp.close()  # stream=True: fecha o socket antes de re-tentar
                 self._sleep_backoff(attempt, retry_after)
@@ -780,20 +805,29 @@ class ORClient:
                     f"OpenRouter {resp.status_code} (terminal): {detalhe}"
                 )
 
+            progresso = {"bytes": 0, "conteudo": 0}
             try:
-                return self._consume_stream(resp), geradas
+                return self._consume_stream(resp, progresso), geradas
             except (RequestException, OSError) as exc:
                 # Transporte caiu com o stream já aberto (RST, timeout de leitura,
                 # IncompleteRead). É a falha DOMINANTE numa chamada de 300-1200s, e antes
                 # escapava do loop: 1 tentativa de MAX_RETRIES, cobrada como fracasso.
+                # Estado DESCONHECIDO: o provedor pode ter gerado tudo e o retorno é que
+                # se perdeu. Conservador é cobrar.
+                geradas += 1
+                contagem["geradas"] = geradas
                 last_exc = exc
                 resp.close()
                 self._sleep_backoff(attempt, None)
                 continue
             except ORClient._Retriable as exc:
-                # erro-em-corpo-200 ou stream truncado: só conta como cobrada a
-                # tentativa que realmente PRODUZIU lá em cima (ver _Retriable.gerou)
-                if exc.gerou:
+                # erro-em-corpo-200 ou stream truncado. Quem decide é o que foi
+                # PRODUZIDO, não o código: um 429-em-corpo pode chegar depois de
+                # conteúdo (foi cobrado), e um stream vazio pode terminar sem [DONE]
+                # sem nada ter sido gerado (não foi).
+                cobravel = (progresso["conteudo"] > 0 if exc.recusa
+                            else progresso["bytes"] > 0)
+                if cobravel:
                     geradas += 1
                     contagem["geradas"] = geradas
                 last_exc = exc
@@ -806,12 +840,25 @@ class ORClient:
             f"e cobradas pelo provedor): {last_exc}")
 
     @staticmethod
-    def _consume_stream(resp: Response) -> dict:
+    def _consume_stream(resp: Response, progresso: dict | None = None) -> dict:
         """Acumula SSE -> dict {choices, usage, provider, citations}.
 
         OpenRouter embute erro de upstream num corpo 200 (campo `error` com
         `code`). Classifica: code 429/5xx -> _Retriable; senão terminal.
+
+        `progresso["bytes"]` conta o que ja veio NO FIO, e e atualizado a cada linha --
+        inclusive quando esta funcao levanta. E o unico jeito de o laco de retry saber
+        se aquela tentativa foi cobrada la em cima: o codigo do erro nao diz (um
+        429-em-corpo pode chegar DEPOIS de conteudo, e um stream vazio pode terminar
+        sem [DONE] sem nada ter sido gerado).
+
+        Conta BYTE recebido, nao conteudo parseado: um chunk truncado no meio do JSON
+        nao vira texto nenhum, mas os bytes estavam no fio -- o provedor gerou e
+        cobrou. Medir pelo parse subcontava exatamente a falha mais comum de streaming.
         """
+        progresso = {} if progresso is None else progresso
+        progresso.setdefault("bytes", 0)      # veio algo no fio?
+        progresso.setdefault("conteudo", 0)   # veio TEXTO, e nao so mensagem de erro?
         saw_done = False
         content_parts: list[str] = []
         usage: dict = {}
@@ -820,6 +867,7 @@ class ORClient:
         citations: list = []
         annotations: list = []
         for raw_line in resp.iter_lines():
+            progresso["bytes"] += len(raw_line or b"")
             if not raw_line:
                 continue
             line = raw_line.decode("utf-8", "replace")
@@ -843,7 +891,7 @@ class ORClient:
                     # 429 = recusa (nada gerado, nada cobrado lá). 5xx = o provedor
                     # começou e morreu: conservador é assumir que gerou e cobrou.
                     raise ORClient._Retriable(f"upstream {code}: {msg}",
-                                              gerou=(code != 429))
+                                              recusa=(code == 429))
                 raise RuntimeError(f"OpenRouter erro-em-corpo {code} (terminal): {msg}")
             provider = obj.get("provider", provider)
             model_id = obj.get("model", model_id)
@@ -857,6 +905,7 @@ class ORClient:
                 delta = ch.get("delta") or {}
                 if delta.get("content"):
                     content_parts.append(delta["content"])
+                    progresso["conteudo"] += len(delta["content"])
                 for ann in delta.get("annotations") or []:
                     annotations.append(ann)
         # Stream que acaba SEM o [DONE] foi truncado — conexão caiu, provider morreu no

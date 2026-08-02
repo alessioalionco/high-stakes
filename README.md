@@ -148,8 +148,6 @@ forma conservadora — um stream derrubado pode ter sido cobrado do outro lado.
 
 - a reserva usa uma **estimativa**. Se o custo real vier acima dela, quem interrompe o run
   é a reconciliação — **depois** de a chamada ter sido paga;
-- o contador de tentativas já cobradas pelo provedor ainda **subestima** em alguns
-  caminhos de falha de transporte (está no roadmap do `core/execution.md`);
 - o teto vale por instância contra o gasto acumulado. Se você abrir um segundo processo
   pedindo um teto maior, ele respeita o teto **dele**, não o do primeiro — isso é decisão
   do operador, e o motor avisa quando os dois discordam em vez de escolher por você.
@@ -168,7 +166,7 @@ for t in tests/test_*.py; do python3 -m "tests.$(basename "$t" .py)" || exit 1; 
 
 ## Estado
 
-**293 testes em 11 suítes — todos os 12 módulos com rede própria.** O que está coberto: o
+**296 testes em 11 suítes — todos os 12 módulos com rede própria.** O que está coberto: o
 caminho do dinheiro (teto por run, cobrança conservadora em falha pós-disparo, número
 não-finito vindo do provedor não desliga o teto), o dispatcher paralelo (célula que falha
 não some, id duplicado barrado antes do gasto, resume travado por hash de input,
