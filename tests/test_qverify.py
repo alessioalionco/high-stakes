@@ -249,6 +249,58 @@ def main() -> int:
             "W2d: continuação lazy não parte a quote em pedaço curto demais",
             not any(f["status"] == "curta_nao_verificavel" for f in verify(lazy, cells))))
 
+        # ===== achados da AUDITORIA POR MUTAÇÃO (linhas que nenhum teste cobria) =====
+        # O auditor quebra o código uma linha por vez e roda as 11 suítes. Mutação que
+        # SOBREVIVE = linha sem teste. Estas quatro sobreviveram; três eram gap real.
+
+        # M1 (qverify.py, `if not segs`) — a §4 chama `_match` SEM o corte de MIN_QUOTE
+        # que as quotes têm. Uma epígrafe que normaliza para nada tem segmentos vazios, e
+        # `_in_one_cell_ordered([], ...)` percorre zero segmentos, não quebra, e devolve
+        # True: a epígrafe sai VERIFICADA. Fail-open no caminho que ninguém olhava.
+        epi_vazia = ('## §4 x\n### 4.1 The Unit Economist\n*"..."*\n')
+        results.append(case(
+            "M1: epígrafe que normaliza para nada NÃO sai verificada",
+            all(f["status"] != "verified" for f in verify(epi_vazia, cells))))
+
+        # M2 (qverify.py, o guard do "verde vazio") — este guard foi escrito DE PROPÓSITO
+        # contra um falso-verde: "VERDE — 0/0" num dossiê que TEM atribuições significa
+        # que o verificador não entendeu nenhuma, não que estão todas certas. Ele nunca
+        # teve teste — um guard anti-falso-verde que era ele mesmo não verificado.
+        import io, contextlib
+        from high_stakes import qverify as _qv
+
+        def roda_cli(texto_md):
+            rep = tmp / "cli.md"
+            rep.write_text(texto_md, encoding="utf-8")
+            buf = io.StringIO()
+            argv = sys.argv
+            sys.argv = ["qverify.py", str(rep), str(cells)]
+            try:
+                with contextlib.redirect_stdout(buf):
+                    rc = _qv.main()
+            finally:
+                sys.argv = argv
+            return rc, buf.getvalue()
+
+        rc_vazio, saida_vazio = roda_cli(
+            'Prosa com atribuição em forma errada: — **The Unit Economist** disse isso.\n')
+        results.append(case(
+            "M2: dossiê COM atribuições e ZERO extraídas é VERMELHO (verde vazio é falso)",
+            rc_vazio != 0 and "VERMELHA" in saida_vazio))
+
+        # M3 (qverify.py, validação de caminho do CLI) — o CLI é o que o usuário roda de
+        # verdade (`high-stakes qverify report.md cells/`) e não tinha teste nenhum.
+        argv = sys.argv
+        sys.argv = ["qverify.py", str(tmp / "nao-existe.md"), str(cells)]
+        try:
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc_inex = _qv.main()
+        finally:
+            sys.argv = argv
+        results.append(case("M3: CLI com report inexistente sai VERMELHO, não crasha",
+                            rc_inex == 1 and "VERMELHA" in buf.getvalue()))
+
         print(f"{sum(results)}/{len(results)} testes ok")
         return 0 if all(results) else 1
     finally:

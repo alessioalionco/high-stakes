@@ -226,6 +226,10 @@ def _malformed_attributions(report_md: str) -> list[tuple[str, str]]:
         estrita é julgado sozinho.
         """
         if not seg:
+            # Guard defensivo puro, e a auditoria por mutação confirma: neutralizá-lo não
+            # derruba teste nenhum, porque `any()` sobre lista vazia já é False. Fica pela
+            # legibilidade, não pela semântica — e a nota existe para o próximo auditor
+            # não gastar tempo tentando escrever um teste que não existe.
             return
         if any(ATTRIB_LOOSE_RE.search(l) for l in seg):
             ruins.append(("atribuicao_malformada", seg[-1].strip()))
