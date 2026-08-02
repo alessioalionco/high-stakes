@@ -1,219 +1,208 @@
 # high-stakes
 
-Motor de rigor para decisões caras de refazer.
+A rigor engine for decisions that are expensive to redo.
 
-Você tem um deck para o board, uma narrativa de posicionamento, uma decisão estratégica —
-algo que vai para fora e que você não vai poder desfazer. Pedir uma opinião a um modelo
-devolve um conselheiro simpático. Este motor faz outra coisa: monta um **painel
-adversarial cego**, faz cada conselheiro atacar o material sem saber o que os outros
-disseram, **refuta o próprio consenso**, e devolve um dossiê onde toda citação atribuída
-foi verificada por código contra a resposta original.
+You have a board deck, a positioning narrative, a strategic call — something that ships
+to the outside world and cannot be unshipped. Ask a model for an opinion and you get a
+friendly advisor. This engine does the opposite: it runs a **blind adversarial panel** —
+each advisor attacks your material without seeing what the others said — then **refutes
+its own consensus**, and returns a dossier where every attributed quote was verified by
+code against the original answer.
 
-Ele não prevê como a sala vai reagir. Ele mede **onde a sua decisão quebra sob ataque** —
-que é a pergunta útil antes de entrar na sala.
+It does not predict how the room will react. It measures **where your decision breaks
+under attack** — which is the useful question before you walk into the room.
 
-### O que ele NÃO é, medido e não estimado
+## The 18-of-35 problem
 
-Na única vez em que a saída foi comparada com o mundo real, o motor previu um **júri** — a
-sala checando premissas e cobrando números. A reunião foi um **coach**: as pessoas
-ajudaram a melhorar a proposta em vez de atacá-la. O dossiê estava certo sobre *onde o
-material era frágil* e errado sobre *como a sala se comportaria*.
+While building this, I checked a finished dossier against the raw panel outputs. **18 of
+35 quotes had been silently altered** — trims, splices, one entire sentence nobody ever
+said. None of it was intentional: a language model paraphrases what it read and hands it
+back inside quotation marks.
 
-Daí o nome. É stress-test, não oráculo. Use para achar o buraco antes que alguém ache;
-não use para prever a reação de ninguém.
+So quotes are verified by code, not by trust. `qverify` matches every attributed quote
+against the raw cell of that specific advisor — verbatim, segments in order, within a
+single cell — and rejects the dossier otherwise. Wrong voice fails too: a real sentence
+attributed to the wrong advisor does not pass.
 
-**n=2.** Duas decisões reais até aqui, medidas por quem construiu o motor. Isso não é
-amostra, é anedota — e quem calibra confiança em cima de dois casos, dois deles do autor,
-está fazendo exatamente o erro que este motor existe para pegar.
+## Is this for you?
 
-### Antes de instalar: isto serve pra você?
+You need all of these at once:
 
-Serve se você tem, ao mesmo tempo:
+- a decision that **ships externally** and is expensive to redo (board deck, positioning,
+  fundraise narrative) — for anything else, this is overkill;
+- **Claude Code** and Python 3.11+;
+- an **OpenRouter** key with credit, and willingness to spend per decision (the real cost
+  of your case shows up in preflight, before anything is dispatched — don't trust a fixed
+  range; the estimate can undershoot);
+- **willingness to send your material to multiple model and search providers.** There is
+  no content filter on the way out (see "What leaves your machine"). If this material
+  cannot leave your machine, stop here — this tool is not for your case, and no
+  configuration changes that.
 
-- uma decisão que **vai para fora** e é cara de refazer (um deck de board, um
-  posicionamento, uma narrativa de fundraise) — para o resto, é caro demais;
-- **Claude Code** e Python 3.11+;
-- uma chave da **OpenRouter** com saldo, e disposição de gastar por decisão (o custo real
-  do seu caso aparece no preflight, antes de qualquer disparo pago — não confie numa
-  faixa fixa, inclusive porque a estimativa pode subestimar);
-- **disposição de mandar o seu material para vários provedores de modelo e de busca.**
-  Não há filtro de conteúdo na saída (ver "O que sai daqui", mais abaixo). Se esse
-  material não pode sair da sua máquina, pare aqui — esta ferramenta não é para o seu
-  caso, e nenhuma configuração muda isso.
-
-## Instalação
+## Install
 
 ```
 /plugin marketplace add alessioalionco/high-stakes
 /plugin install high-stakes@high-stakes
 ```
 
-O `@high-stakes` do segundo comando é o nome do marketplace, não repetição: o primeiro
-comando registra o catálogo, o segundo instala o plugin dele.
+The `@high-stakes` is the marketplace name, not a typo: the first command registers the
+catalog, the second installs the plugin from it.
 
-É isso. **Zero dependências** — o motor usa só a biblioteca padrão do Python (3.11+).
-Não existe `pip install` neste fluxo, de propósito: uma dependência faltando falharia
-depois de você já ter escrito o brief e aprovado o custo.
-
-Só falta a chave do provedor:
+That's it. **Zero dependencies** — stdlib only, Python 3.11+. There is no `pip install`
+in this flow on purpose: a missing dependency would fail after you had already written
+the brief and approved the cost.
 
 ```bash
 export OPENROUTER_API_KEY=...
 ```
 
-## Uso
+## Use
 
 ```
-/high-stakes devo circular este deck para o board agora ou esperar o fechamento do trimestre?
+/high-stakes should I circulate this deck to the board now, or wait for the quarter to close?
 ```
 
-O motor conduz o resto: refina o pedido com um brief pré-preenchido, propõe a composição
-do board, mostra o custo estimado, e só dispara depois do seu GO.
+The engine drives the rest: refines the ask into a pre-filled brief, proposes the board
+composition, shows the estimated cost, and only dispatches after your GO.
 
-## Como funciona
+## How it works
 
 ```
-       o seu problema
+        your problem
              │
-        Gate A  ── perguntas essenciais + materiais + agenda de pesquisa
+        Gate A  ── essential questions + materials + research agenda
              │
-        Gate B  ── brief afiado + board proposto + custo → você dá GO
-             │
-             ▼
-   painel adversarial CEGO
-   personas × modelos de famílias diferentes, cada célula sem ver as outras
+        Gate B  ── sharpened brief + proposed board + cost → you say GO
              │
              ▼
-      refutação por item ── um modelo separado ataca o consenso do painel
+   BLIND adversarial panel
+   personas × models from different families, no cell sees another
              │
              ▼
-   ┌─── três gates de código, todos exit 0 obrigatório ───┐
-   │  render_gate     estrutura do dossiê + jargão        │
-   │  qverify         toda citação é verbatim             │
-   │  render_dossier  HTML single-file                    │
-   └──────────────────────────────────────────────────────┘
+   per-item refutation ── a separate model attacks the panel's consensus
              │
              ▼
-      dossiê §0–§7
+   ┌── three code gates, all must exit 0 ─────────────┐
+   │  render_gate     dossier structure + jargon      │
+   │  qverify         every quote is verbatim         │
+   │  render_dossier  single-file HTML                │
+   └──────────────────────────────────────────────────┘
+             │
+             ▼
+       dossier §0–§7
 ```
 
-**Por que famílias diferentes de modelo:** dois modelos da mesma família erram junto. Um
-painel que erra junto não é painel — é um conselheiro com sotaques.
+**Why different model families:** two models from the same family fail together. A panel
+that fails together isn't a panel — it's one advisor with accents.
 
-**Por que cego:** conselheiro que vê a resposta do anterior converge para ela. A
-convergência só vale como sinal se for independente.
+**Why blind:** an advisor who sees the previous answer converges to it. Convergence only
+counts as signal if it is independent.
 
-**Por que refutar o próprio consenso:** unanimidade costuma ser eco do enunciado, não
-sinal. O refutador existe para achar o caso em que o painel inteiro está errado junto.
+**Why refute your own consensus:** unanimity is usually an echo of the prompt, not
+signal. The refuter exists to find the case where the whole panel is wrong together.
 
-**Sobre os conselheiros:** as lentes levam nomes de pessoas reais, mas são **simulações
-por modelo de linguagem** — as pessoas não disseram nada disso. O motor obriga o dossiê a
-declarar isso, e reprova quem não declarar: o artefato circula, e a atribuição
-`— **Nome**` tem a mesma cara de uma citação de verdade.
+**About the advisors:** the lenses carry names of real people, but they are **simulations
+by language models** — the real people said none of this. The engine forces every dossier
+to declare that, and rejects the ones that don't: the artifact circulates, and
+`— **Name**` looks exactly like a real citation.
 
-**Por que verificar citação por código:** editar um dossiê distorce citação sem que
-ninguém perceba. Ao verificar um dossiê pronto, 18 de 35 citações estavam sutilmente
-alteradas — cortes, emendas, uma frase inteira acrescentada. Nenhuma foi intencional.
-
-## Configuração
+## Configuration
 
 ```bash
-bin/high-stakes config     # mostra o config efetivo e de onde cada coisa veio
+bin/high-stakes config     # shows effective config and where each value came from
 ```
 
-Os comandos vão pelo `bin/high-stakes`, que resolve a raiz do pacote a partir da própria
-localização — funciona de qualquer diretório, sem instalação e sem `PYTHONPATH`.
+Commands go through `bin/high-stakes`, which resolves the package root from its own
+location — works from any directory, no install, no `PYTHONPATH`.
 
-Precedência: argumento explícito > variável de ambiente > `./.high-stakes.toml` >
+Precedence: explicit argument > environment variable > `./.high-stakes.toml` >
 `~/.high-stakes/config.toml` > default.
 
-| Chave | Default | Governa |
+| Key | Default | Governs |
 |---|---|---|
-| `runs_dir` | `./high-stakes-runs` | onde a decisão é gravada |
-| `boards_dir` | `~/.high-stakes/boards` | o seu pool de lentes |
-| `pin_path` | `~/.high-stakes/roster-pin.yaml` | quais modelos julgam |
-| `cap_usd` | `15.0` | teto de gasto **por run** |
-| `concurrency` | `8` | células simultâneas |
-| `timeout_s` | `1200` | por chamada |
+| `runs_dir` | `./high-stakes-runs` | where the decision is recorded |
+| `boards_dir` | `~/.high-stakes/boards` | your pool of lenses |
+| `pin_path` | `~/.high-stakes/roster-pin.yaml` | which models judge |
+| `cap_usd` | `15.0` | spending cap **per run** |
+| `concurrency` | `8` | simultaneous cells |
+| `timeout_s` | `1200` | per call |
 
-A chave de API **não** entra no config, de propósito — arquivo de config tende a ser
-versionado, e chave em repositório é acidente esperando acontecer.
+The API key never enters the config file, on purpose — config files get committed, and a
+key in a repository is an accident waiting to happen.
 
-### O teto de gasto, e onde ele NÃO segura
+### The spending cap, and where it does not hold
 
-O motor reserva o custo estimado **antes** de disparar e recusa a chamada se ela
-estourar o teto. A contabilidade é por run e vale entre processos: o gasto acumula no
-mesmo ledger, então dois terminais atacando a mesma decisão não gastam o teto cada um, e
-as reservas em voo são visíveis entre eles. Falha de rede depois do disparo é cobrada de
-forma conservadora — um stream derrubado pode ter sido cobrado do outro lado.
+The engine reserves the estimated cost **before** dispatching and refuses the call if it
+would blow the cap. Accounting is per run and works across processes: spend accumulates
+in one ledger, so two terminals attacking the same decision don't each get the full cap,
+and in-flight reservations are visible between them. A network failure after dispatch is
+charged conservatively — a dropped stream may have been billed on the other side.
 
-**É best-effort, não garantia**, e a diferença importa quando é o seu cartão:
+**It is best-effort, not a guarantee**, and the difference matters when it's your card:
 
-- a reserva usa uma **estimativa**. Se o custo real vier acima dela, quem interrompe o run
-  é a reconciliação — **depois** de a chamada ter sido paga;
-- o teto vale por instância contra o gasto acumulado. Se você abrir um segundo processo
-  pedindo um teto maior, ele respeita o teto **dele**, não o do primeiro — isso é decisão
-  do operador, e o motor avisa quando os dois discordam em vez de escolher por você.
+- reservations use an **estimate**. If the real cost comes in higher, what stops the run
+  is reconciliation — **after** the call has been paid for;
+- the cap binds each instance against accumulated spend. A second process asking for a
+  higher cap honors **its own** — that is an operator decision, and the engine warns
+  instead of choosing for you.
 
-Trate como o cinto que impede o acidente comum (laço que dispara mil células), não como
-uma trava que torna impossível gastar a mais.
+Treat it as the seatbelt that prevents the common accident (a loop dispatching a
+thousand cells), not a lock that makes overspending impossible.
 
-## Testes
+## What leaves your machine
 
-Sem framework: cada suíte é um script executável que imprime `PASS` e sai diferente de
-zero em falha.
+Running this engine means sending your material to model and search providers — that is
+the premise, not a side effect. **There is no content filter on the way out.** There used
+to be one: a denylist that refused queries containing sensitive terms. It was removed on
+purpose. It protected the owner's data from the owner — the person writing the query,
+owning the material, and choosing the providers is the same person — and what it actually
+produced was false refusals on legitimate queries.
+
+What replaced it is **Gate B**: before any paid dispatch, the engine shows you exactly
+what will leave and waits for your OK. A human with the list in front of them beats a
+substring heuristic, and it is honest about who is deciding.
+
+## Tests
+
+No framework: each suite is an executable script that prints `PASS` and exits non-zero
+on failure.
 
 ```bash
 for t in tests/test_*.py; do python3 -m "tests.$(basename "$t" .py)" || exit 1; done
 ```
 
-## Estado
+**304 tests across 11 suites — all 12 modules covered.** The money path (per-run cap,
+conservative charging on post-dispatch failure, a non-finite number from a provider
+cannot disable the cap), the parallel dispatcher (a failing cell doesn't vanish,
+duplicate ids blocked before spend, resume keyed by input hash, judge isolation), reuse
+containment (no reads outside the run directory, symlinks included), quote verification
+(a fabricated quote next to a real one does not pass), domain blocklist, config
+precedence, aggregations, render gates, and a smoke test that runs the product like
+someone who just installed it.
 
-**304 testes em 11 suítes — todos os 12 módulos com rede própria.** O que está coberto: o
-caminho do dinheiro (teto por run, cobrança conservadora em falha pós-disparo, número
-não-finito vindo do provedor não desliga o teto), o dispatcher paralelo (célula que falha
-não some, id duplicado barrado antes do gasto, resume travado por hash de input,
-isolamento entre juízes), a contenção do material reusado (não lê fora do diretório do
-run, nem por symlink), a verificação de citação (quote fabricada ao lado de uma real não
-passa), a blocklist de domínio na resposta, a precedência de config, as agregações, os
-gates de render, e um smoke que roda o produto como quem acabou de instalar.
+A green suite measures what the author thought to test. So the critical guards also go
+through **mutation testing**: break the guard on purpose, confirm a suite turns red. A
+guard that survives its own removal was never tested — that is how five of them were
+found uncovered after months of looking covered.
 
-Suíte verde mede o que o autor pensou em testar, então as guardas críticas passam por
-**teste de mutação**: quebra-se a guarda de propósito e confere-se que alguma suíte fica
-vermelha. Guarda que sobrevive à própria remoção não estava testada — foi assim que cinco
-delas (duas no caminho do dinheiro, três no gate de render) foram descobertas sem teste,
-depois de meses parecendo cobertas.
+The zero-dependency promise is **checked by AST** on every suite run, not trusted: add an
+`import requests` anywhere and a test fails, naming the module.
 
-### O que sai daqui, e o que NÃO filtra isso
+## What the contract describes that does not exist yet
 
-Rodar este motor significa mandar o seu material para provedores de modelo e de busca —
-está no critério de elegibilidade, e é a premissa, não um efeito colateral. **Não existe
-filtro de conteúdo na saída.** Existiu: uma denylist de termos que recusava a query. Foi
-removida de propósito. Ela protegia o dado do dono contra o dono — quem escreve a query,
-quem é dono do material e quem escolhe os provedores são a mesma pessoa —, e o que ela
-produzia na prática era recusa falsa em query legítima.
+The engine is specified by contracts in `high_stakes/core/`, and not everything specified
+is built. The list lives in **`core/execution.md`**, in the table at the end, with what
+to do while each thing doesn't exist. Today it includes: routing to no-retention
+providers, automatic verification that a cited source supports the claim, aborting when
+fewer than 3 model families are alive, and enforcement of brand-blinding in the judgment
+view.
 
-No lugar dela fica o **Gate B**: antes de qualquer disparo pago, o motor mostra o que vai
-sair e espera o seu OK. Um humano com a lista na frente decide melhor que uma heurística
-de substring, e é honesto sobre quem está decidindo.
+Nothing on that list should be presented — by this README, by the contract, or by a
+dossier — as if it worked.
 
-A promessa de zero dependência é **verificada por AST** a cada run da suíte, não confiada:
-se alguém adicionar um `import requests`, o teste falha e nomeia o módulo.
+See `examples/sample-dossier.html` for the output format.
 
-Veja `examples/sample-dossier.html` para o formato de saída.
+## License
 
-### O que o contrato descreve e ainda NÃO existe
-
-O motor é descrito por contratos em `high_stakes/core/`, e nem tudo que está descrito lá
-está construído. A lista fica em **`core/execution.md`**, na tabela do fim, com o que fazer
-enquanto cada coisa não existe — vale ler antes de confiar em algum comportamento
-específico. Hoje inclui, entre outros: roteamento para provedor sem retenção de dados,
-verificação automática de que uma fonte citada sustenta o claim, aborto quando sobram menos
-de 3 famílias de modelo vivas, e imposição do brand-blinding na visão de julgamento.
-
-Nada nessa lista deve ser apresentado — por este README, pelo contrato, ou por um dossiê —
-como se funcionasse.
-
-## Licença
-
-Apache-2.0 — ver [LICENSE](LICENSE).
+Apache-2.0 — see [LICENSE](LICENSE).

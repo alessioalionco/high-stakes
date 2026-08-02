@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
-PADRAO = r"\*\*(\d+) testes em (\d+) suítes — todos os (\d+) módulos"
+PADRAO = r"\*\*(\d+) tests across (\d+) suites — all (\d+) modules"
 
 
 def main() -> int:
@@ -25,7 +25,7 @@ def main() -> int:
     m = re.search(PADRAO, readme)
     if not m:
         print("README: não achei a frase de cobertura "
-              "('**N testes em M suítes — todos os K módulos').")
+              "('**N tests across M suites — all K modules').")
         return 1
 
     suites = sorted((RAIZ / "tests").glob("test_*.py"))
