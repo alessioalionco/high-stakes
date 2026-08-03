@@ -59,16 +59,16 @@ method with the most thought in it:
 
 ## Why this beats pasting the same prompt into a chat
 
-You could ask your favorite model to "act as a board of The Unit Economist, The Model Theorist and The Wartime Operator." Here
+You could ask your favorite model to "act as a board of The Unit Economist, The Model Theorist, and The Wartime Operator." Here
 is what that doesn't get you, and what this engine was built for:
 
 **1. One model, one prompt, gets you the average.** Ask an LLM for an opinion and you
 get the center of its training distribution — the most popular answer, smoothed. But
 there are many ways to get from A to B: you can lose weight with more exercise, a
 ketogenic diet, or medication, and each is a different protocol with different costs and
-failure modes. The average of them is not a protocol. A named lens with a defined axis
+failure modes. Their average is not a protocol. A named lens with a defined axis
 pulls the model out of the average and into one way of thinking — a CEO asking "a CEO"
-for feedback gets generic advice; a board seating the world's sharpest CFO, CTO and CMO
+for feedback gets generic advice; a board seating the world's sharpest CFO, CTO, and CMO
 answers the same question three different ways. Convergence across seats validates the
 decision. Divergence is where you learn — it maps the options you didn't know you had.
 
@@ -97,8 +97,8 @@ would change your mind? When I stress-tested a fundraise narrative, every seat h
 commit to a valuation and a term-sheet verdict before writing a single line of
 commentary. Forced calls make seats comparable on the same question, turn disagreement
 into a measurable spread, and give you something to score against reality later —
-instead of a pile of opinions everyone remembers fondly. A simulation helps here, not
-hurts: a polite human advisor hedges; a lens has no reputation to protect.
+instead of a pile of opinions everyone remembers fondly. Here, being a simulation helps
+rather than hurts: a polite human advisor hedges; a lens has no reputation to protect.
 
 **6. The engine attacks its own output.** After the panel, a separate model is paid to
 refute the consensus, item by item. Unanimity is usually an echo of the prompt, not
@@ -128,7 +128,7 @@ in a board's output:
 
 ## How I use it
 
-- **Preparing for my own board meetings.** It has been precise at anticipating the
+- **Preparing for my own board meetings.** It has been eerily good at anticipating the
   questions I actually get, and at finding where the material is fragile before anyone in
   the room does.
 - **Stress-testing projects my team proposes**, before we commit money and quarters to
@@ -148,8 +148,8 @@ You need all of these at once:
   range; the estimate can undershoot);
 - **willingness to send your material to multiple model and search providers.** There is
   no content filter on the way out (see "What leaves your machine"). If this material
-  cannot leave your machine, stop here — this tool is not for your case, and no
-  configuration changes that.
+  cannot leave your machine, stop here — this tool is not for your case, and no setting
+  will change that.
 
 ## Install
 
