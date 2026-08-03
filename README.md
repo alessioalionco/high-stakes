@@ -1,28 +1,120 @@
 # high-stakes
 
-A rigor engine for decisions that are expensive to redo.
+A virtual board of experts for decisions that are expensive to redo.
 
-You have a board deck, a positioning narrative, a strategic call — something that ships
-to the outside world and cannot be unshipped. Ask a model for an opinion and you get a
-friendly advisor. This engine does the opposite: it runs a **blind adversarial panel** —
-each advisor attacks your material without seeing what the others said — then **refutes
-its own consensus**, and returns a dossier where every attributed quote was verified by
-code against the original answer.
+## The idea
 
-It does not predict how the room will react. It measures **where your decision breaks
-under attack** — which is the useful question before you walk into the room.
+Nobody serious makes a high-stakes decision alone. Companies answer to boards. Medicine
+runs on second opinions — doctors with different training and different protocols looking
+at the same case. Products have customer advisory boards; careers have mentors. The
+pattern shows up everywhere because it works: decision quality goes up when independent
+perspectives with different backgrounds attack the same problem.
 
-## The 18-of-35 problem
+Multi-model adversarial review already proved the pattern transfers to AI — code reviewed
+by several models from different vendors catches what any single model misses.
+high-stakes applies it to decisions.
 
-While building this, I checked a finished dossier against the raw panel outputs. **18 of
-35 quotes had been silently altered** — trims, splices, one entire sentence nobody ever
-said. None of it was intentional: a language model paraphrases what it read and hands it
-back inside quotation marks.
+You bring the question — a board deck, a positioning narrative, a strategic call,
+something that ships to the outside world and cannot be unshipped. The engine **builds
+the board for your problem**: it classifies what kind of panel the decision needs, maps
+what must be covered, and proposes one seat per axis, which you ratify or swap. Each seat
+is a lens on a sharp public thinker, and each lens runs on a different model family. A
+starter board of thirteen SaaS operators and investors ships in the box, and any board
+you build from scratch can be saved to your pool and reused.
 
-So quotes are verified by code, not by trust. `qverify` matches every attributed quote
-against the raw cell of that specific advisor — verbatim, segments in order, within a
-single cell — and rejects the dossier otherwise. Wrong voice fails too: a real sentence
-attributed to the wrong advisor does not pass.
+It is not one AI opinion. It is a panel engineered to disagree — and it does not predict
+how the room will react. It measures **where your decision breaks under attack**, which
+is the useful question before you walk into the room.
+
+**About the advisors, said plainly:** the lenses carry names of real people, but they are
+**simulations by language models**, drawing on what the models know of each person's
+published thinking. The real people said none of this, and no curated index of their work
+is involved. The engine forces every dossier to declare this and rejects the ones that
+don't: the artifact circulates, and `— **Name**` looks exactly like a real citation.
+
+## The board is built for the problem
+
+You don't pick from a fixed cast. Formation is task-driven, and it is the part of the
+method with the most thought in it:
+
+- **First question of every run:** use a board you've already curated, or build one from
+  scratch for this problem?
+- **The problem is classified by archetype** — expert panel (cover the necessary
+  disciplines), adversarial panel (cover the ways this can fail), or audience proxy
+  (cover the segments of whoever you need to convince). Most real cases are hybrids.
+- **Then a coverage matrix:** list what must be covered, one seat per axis. Seats qualify
+  by peer recognition — cited by experts, guideline authorship, track record. Fame is not
+  authority.
+- **Three standing roles always sit:** a generalist per model (catches the axis everyone
+  forgot), an anti-thesis seat (attacks the premise — "is this even the right
+  question?"), and a bull/bear pair on the crux axis when the risk warrants it.
+- **You ratify.** The engine shows the roster, each seat's axis, and each seat's known
+  bias — then you swap or confirm. Bias is a feature, not a bug: the urologist pushes
+  toward surgery, and the radiation oncologist cancels it out.
+- **Boards die with the decision; lenses persist.** A board is frozen while a decision
+  loops (swapping a seat mid-loop breaks the round-to-round comparison) and born fresh
+  for the next one. The lenses you build get saved to your pool
+  (`~/.high-stakes/boards`) for reuse. The shipped SaaS board is a starter, not the
+  product.
+
+## Why this beats pasting the same prompt into a chat
+
+You could ask your favorite model to "act as a board of The Unit Economist, The Model Theorist and The Wartime Operator." Here
+is what that doesn't get you, and what this engine was built for:
+
+**1. Different model families, on purpose.** Two models from the same family fail
+together — same data, same method, same blind spots. A panel that fails together isn't a
+panel; it's one advisor with accents. Here each seat runs on a different family, with
+different training corpora and different training methods, so when the seats agree
+independently, the agreement carries information.
+
+**2. Isolation you can verify.** Each advisor × model pair is one API call with a clean
+context. No cell sees another's answer, and there are no rounds — an advisor who reads
+the previous answer converges to it, and convergence only counts as signal when it is
+independent. This is not a promise: it is a tested invariant. There is no code path by
+which one cell's output can enter another's prompt.
+
+**3. Evidence before opinions.** Before the panel runs, a deep-research pass builds an
+evidence pack for the questions your decision actually depends on, with every source
+classified by trust tier (primary > analyst > press > vendor blog) and a domain blocklist
+that flags leaks. The board argues over the same grounded material — not over whatever
+each model happens to remember.
+
+**4. The engine attacks its own output.** After the panel, a separate model is paid to
+refute the consensus, item by item. Unanimity is usually an echo of the prompt, not
+signal. The refuter exists to find the case where the whole board is wrong together.
+
+**5. Quotes verified by code — the 18-of-35 problem.** While building this, I checked a
+finished dossier against the raw panel outputs: **18 of 35 quotes had been silently
+altered** — trims, splices, one entire sentence nobody ever said. None of it intentional:
+a model paraphrases what it read and hands it back inside quotation marks. So `qverify`
+matches every attributed quote against the raw cell of that specific advisor — verbatim,
+segments in order, within a single cell — and rejects the dossier otherwise. A real
+sentence attributed to the wrong advisor fails too.
+
+## What comes back
+
+A dossier (§0–§7, structure enforced by a code gate), organized by what actually matters
+in a board's output:
+
+- **Convergent points** — what every lens hit independently. The closest thing to signal
+  a panel can give.
+- **Forks** — where the board splits: thesis, antithesis, why they diverge, the cost of
+  being wrong on each side, and what evidence would resolve it.
+- **Unique views** — what only one lens saw. Often the most valuable section: a blind
+  spot has no majority.
+- **Refutation results** — which consensus survived attack, and which folded.
+- **A chairman synthesis** — ranked suggestions, open questions, guardrails.
+
+## How I use it
+
+- **Preparing for my own board meetings.** It has been precise at anticipating the
+  questions I actually get, and at finding where the material is fragile before anyone in
+  the room does.
+- **Stress-testing projects my team proposes**, before we commit money and quarters to
+  them.
+- **Throwing a hard problem, plus the data I have, at the board** — and reading where the
+  forks land.
 
 ## Is this for you?
 
@@ -66,7 +158,7 @@ export OPENROUTER_API_KEY=...
 The engine drives the rest: refines the ask into a pre-filled brief, proposes the board
 composition, shows the estimated cost, and only dispatches after your GO.
 
-## How it works
+## How a run works
 
 ```
         your problem
@@ -92,20 +184,6 @@ composition, shows the estimated cost, and only dispatches after your GO.
              ▼
        dossier §0–§7
 ```
-
-**Why different model families:** two models from the same family fail together. A panel
-that fails together isn't a panel — it's one advisor with accents.
-
-**Why blind:** an advisor who sees the previous answer converges to it. Convergence only
-counts as signal if it is independent.
-
-**Why refute your own consensus:** unanimity is usually an echo of the prompt, not
-signal. The refuter exists to find the case where the whole panel is wrong together.
-
-**About the advisors:** the lenses carry names of real people, but they are **simulations
-by language models** — the real people said none of this. The engine forces every dossier
-to declare that, and rejects the ones that don't: the artifact circulates, and
-`— **Name**` looks exactly like a real citation.
 
 ## Configuration
 
@@ -193,15 +271,22 @@ The zero-dependency promise is **checked by AST** on every suite run, not truste
 
 The engine is specified by contracts in `high_stakes/core/`, and not everything specified
 is built. The list lives in **`core/execution.md`**, in the table at the end, with what
-to do while each thing doesn't exist. Today it includes: routing to no-retention
-providers, automatic verification that a cited source supports the claim, aborting when
-fewer than 3 model families are alive, and enforcement of brand-blinding in the judgment
-view.
+to do while each thing doesn't exist. Today it includes: grounding each lens in that
+person's actual published material (today the lens runs on what the model already knows),
+routing to no-retention providers, automatic verification that a cited source supports
+the claim, aborting when fewer than 3 model families are alive, and enforcement of
+brand-blinding in the judgment view.
 
 Nothing on that list should be presented — by this README, by the contract, or by a
 dossier — as if it worked.
 
 See `examples/sample-dossier.html` for the output format.
+
+## PS
+
+This started as a weekend of vibe-coding that got out of hand — and then the
+adversarial-review habit it preaches got turned on its own code. I would genuinely love
+feedback: issues and PRs welcome, and the most useful kind tells me where it is wrong.
 
 ## License
 
