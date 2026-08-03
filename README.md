@@ -62,29 +62,49 @@ method with the most thought in it:
 You could ask your favorite model to "act as a board of The Unit Economist, The Model Theorist and The Wartime Operator." Here
 is what that doesn't get you, and what this engine was built for:
 
-**1. Different model families, on purpose.** Two models from the same family fail
+**1. One model, one prompt, gets you the average.** Ask an LLM for an opinion and you
+get the center of its training distribution — the most popular answer, smoothed. But
+there are many ways to get from A to B: you can lose weight with more exercise, a
+ketogenic diet, or medication, and each is a different protocol with different costs and
+failure modes. The average of them is not a protocol. A named lens with a defined axis
+pulls the model out of the average and into one way of thinking — a CEO asking "a CEO"
+for feedback gets generic advice; a board seating the world's sharpest CFO, CTO and CMO
+answers the same question three different ways. Convergence across seats validates the
+decision. Divergence is where you learn — it maps the options you didn't know you had.
+
+**2. Different model families, on purpose.** Two models from the same family fail
 together — same data, same method, same blind spots. A panel that fails together isn't a
 panel; it's one advisor with accents. Here each seat runs on a different family, with
 different training corpora and different training methods, so when the seats agree
 independently, the agreement carries information.
 
-**2. Isolation you can verify.** Each advisor × model pair is one API call with a clean
+**3. Isolation you can verify.** Each advisor × model pair is one API call with a clean
 context. No cell sees another's answer, and there are no rounds — an advisor who reads
 the previous answer converges to it, and convergence only counts as signal when it is
 independent. This is not a promise: it is a tested invariant. There is no code path by
 which one cell's output can enter another's prompt.
 
-**3. Evidence before opinions.** Before the panel runs, a deep-research pass builds an
+**4. Evidence before opinions.** Before the panel runs, a deep-research pass builds an
 evidence pack for the questions your decision actually depends on, with every source
 classified by trust tier (primary > analyst > press > vendor blog) and a domain blocklist
 that flags leaks. The board argues over the same grounded material — not over whatever
 each model happens to remember.
 
-**4. The engine attacks its own output.** After the panel, a separate model is paid to
+**5. Opinions are forced into falsifiable calls.** Commentary is cheap — "interesting,
+but I'd worry about churn" costs an advisor nothing. So the asks force commitment:
+predict the valuation range. Would you sign this term sheet, yes or no? What number
+would change your mind? When I stress-tested a fundraise narrative, every seat had to
+commit to a valuation and a term-sheet verdict before writing a single line of
+commentary. Forced calls make seats comparable on the same question, turn disagreement
+into a measurable spread, and give you something to score against reality later —
+instead of a pile of opinions everyone remembers fondly. A simulation helps here, not
+hurts: a polite human advisor hedges; a lens has no reputation to protect.
+
+**6. The engine attacks its own output.** After the panel, a separate model is paid to
 refute the consensus, item by item. Unanimity is usually an echo of the prompt, not
 signal. The refuter exists to find the case where the whole board is wrong together.
 
-**5. Quotes verified by code — the 18-of-35 problem.** While building this, I checked a
+**7. Quotes verified by code — the 18-of-35 problem.** While building this, I checked a
 finished dossier against the raw panel outputs: **18 of 35 quotes had been silently
 altered** — trims, splices, one entire sentence nobody ever said. None of it intentional:
 a model paraphrases what it read and hands it back inside quotation marks. So `qverify`
