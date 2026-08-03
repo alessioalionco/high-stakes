@@ -1,12 +1,12 @@
-"""Config do high-stakes: precedência, defaults seguros e onde o usuário guarda o dele.
+"""high-stakes config: precedence, safe defaults, and where the user keeps theirs.
 
-    argumento explícito  >  env var  >  ./.high-stakes.toml  >  $HOME/config.toml  >  default
+    explicit argument  >  env var  >  ./.high-stakes.toml  >  $HOME/config.toml  >  default
 
-TOML pela stdlib (`tomllib`, py3.11+) — nenhuma dependência nova, que é a promessa do D8.
+TOML via the stdlib (`tomllib`, py3.11+) — no new dependency, which is the D8 promise.
 
-**A chave de API não mora aqui, de propósito.** Ela vem de `OPENROUTER_API_KEY` no
-ambiente (ou de um `.env` gitignorado). Chave em arquivo de config é convite a commit
-acidental, e este arquivo é feito pra ser versionado junto com o projeto do usuário.
+**The API key does not live here, on purpose.** It comes from `OPENROUTER_API_KEY` in the
+environment (or from a gitignored `.env`). A key in a config file is an invitation to an
+accidental commit, and this file is meant to be versioned along with the user's project.
 """
 from __future__ import annotations
 
@@ -19,13 +19,13 @@ from typing import Any
 from . import paths
 
 DEFAULTS: dict[str, Any] = {
-    "runs_dir": "./high-stakes-runs",   # onde a decisão é gravada
-    "boards_dir": None,                  # None -> $HOME/boards, com fallback pro embarcado
-    "pin_path": None,                    # None -> $HOME/roster-pin.yaml, idem
-    "cap_usd": 15.0,                     # teto POR RUN
-    "concurrency": 8,                    # células simultâneas
-    "timeout_s": 1200,                   # por chamada
-    "on_model_unavailable": "abort",     # "abort" | "skip-cell" (declarado no dossiê)
+    "runs_dir": "./high-stakes-runs",   # where the decision is recorded
+    "boards_dir": None,                  # None -> $HOME/boards, falling back to shipped
+    "pin_path": None,                    # None -> $HOME/roster-pin.yaml, likewise
+    "cap_usd": 15.0,                     # cap PER RUN
+    "concurrency": 8,                    # simultaneous cells
+    "timeout_s": 1200,                   # per call
+    "on_model_unavailable": "abort",     # "abort" | "skip-cell" (declared in the dossier)
 }
 
 _INT_KEYS = {"concurrency", "timeout_s"}
@@ -37,7 +37,7 @@ LOCAL_CONFIG = ".high-stakes.toml"
 
 
 def home() -> Path:
-    """Diretório do usuário: config, boards e pin dele. `HIGH_STAKES_HOME` sobrescreve."""
+    """The user's directory: their config, boards, and pin. `HIGH_STAKES_HOME` overrides."""
     env = os.environ.get("HIGH_STAKES_HOME")
     return Path(env).expanduser() if env else Path.home() / ".high-stakes"
 
@@ -49,8 +49,8 @@ def _read_toml(p: Path) -> dict:
     except FileNotFoundError:
         return {}
     except (tomllib.TOMLDecodeError, OSError) as e:
-        # config ilegível não pode virar "rodou com defaults" silencioso: o cap é um deles
-        raise RuntimeError(f"config inválido em {p}: {e}") from e
+        # an unreadable config must not silently become "ran with defaults": the cap is one of them
+        raise RuntimeError(f"invalid config at {p}: {e}") from e
 
 
 def _coerce(key: str, value: Any) -> Any:
@@ -61,12 +61,12 @@ def _coerce(key: str, value: Any) -> Any:
     if key in _FLOAT_KEYS:
         return float(value)
     if key in _ENUMS and str(value) not in _ENUMS[key]:
-        raise ValueError(f"{key}={value!r} inválido (use um de {sorted(_ENUMS[key])})")
+        raise ValueError(f"{key}={value!r} is invalid (use one of {sorted(_ENUMS[key])})")
     return value
 
 
 def load(overrides: dict[str, Any] | None = None, *, cwd: Path | None = None) -> dict:
-    """Config efetivo, já na precedência. `overrides` = os argumentos de CLI."""
+    """The effective config, precedence already applied. `overrides` = the CLI arguments."""
     cfg = dict(DEFAULTS)
     cfg.update(_read_toml(home() / CONFIG_NAME))
     cfg.update(_read_toml((cwd or Path.cwd()) / LOCAL_CONFIG))
@@ -78,13 +78,13 @@ def load(overrides: dict[str, Any] | None = None, *, cwd: Path | None = None) ->
         if v is not None:
             cfg[k] = v
     unknown = set(cfg) - set(DEFAULTS)
-    if unknown:  # errar o nome da chave não pode passar por "usei o default"
-        raise ValueError(f"chave(s) de config desconhecida(s): {sorted(unknown)}")
+    if unknown:  # a misspelled key name must not pass as "I used the default"
+        raise ValueError(f"unknown config key(s): {sorted(unknown)}")
     return {k: _coerce(k, v) for k, v in cfg.items()}
 
 
 def _user_or_shipped(user: Path, shipped: Path) -> Path:
-    """O do usuário ganha se existir; senão o que veio na instalação (só-leitura)."""
+    """The user's wins if it exists; otherwise what shipped with the install (read-only)."""
     return user if user.exists() else shipped
 
 
@@ -109,16 +109,16 @@ def runs_dir(cfg: dict | None = None) -> Path:
 
 
 def main(argv: list[str]) -> int:
-    """`python -m high_stakes.config` mostra o config efetivo e de onde cada coisa veio."""
+    """`python -m high_stakes.config` shows the effective config and where each value came from."""
     cfg = load()
-    print(f"HIGH_STAKES_HOME : {home()}{'' if home().exists() else '  (não existe ainda)'}")
+    print(f"HIGH_STAKES_HOME : {home()}{'' if home().exists() else '  (does not exist yet)'}")
     print(f"boards_dir       : {boards_dir(cfg)}")
     print(f"pin_path         : {pin_path(cfg)}")
     print(f"runs_dir         : {runs_dir(cfg)}")
     for k in ("cap_usd", "concurrency", "timeout_s", "on_model_unavailable"):
         print(f"{k:<17}: {cfg[k]}")
-    key = "definida" if os.environ.get("OPENROUTER_API_KEY") else "AUSENTE"
-    print(f"OPENROUTER_API_KEY: {key} (env — nunca no config)")
+    key = "set" if os.environ.get("OPENROUTER_API_KEY") else "MISSING"
+    print(f"OPENROUTER_API_KEY: {key} (env — never in the config)")
     return 0
 
 

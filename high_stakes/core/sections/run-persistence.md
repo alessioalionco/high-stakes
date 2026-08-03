@@ -1,105 +1,105 @@
-# Persistência de runs — layout de disco por decisão (core neutro)
+# Run persistence — per-decision disk layout (neutral core)
 
-> Define COMO cada decisão real vira artefato recuperável e iterável ao longo do tempo — os 2 usos:
-> (1) recuperar todo o contexto no futuro; (2) rodar mais rodadas sobre a mesma decisão conforme
-> evidência nova chega. Harness-neutral: o core fixa o CONTRATO de disco (layout, o que é
-> tracked/gitignored, o manifest); o **root é configurável** e o adapter aponta a instância. Fonte:
-> run-persistence-v1 (definido). É camada por cima do que o motor já cospe — **não muda o
-> motor.**
+> Defines HOW each real decision becomes a recoverable, iterable artifact over time — the 2 uses:
+> (1) recover the full context in the future; (2) run more rounds on the same decision as new
+> evidence arrives. Harness-neutral: the core fixes the disk CONTRACT (layout, what is
+> tracked/gitignored, the manifest); the **root is configurable** and the adapter points at the
+> instance. Source: run-persistence-v1 (settled). It is a layer on top of what the engine already
+> emits — **it does not change the engine.**
 
-## Fronteira: experimento ≠ decisão real
+## Boundary: experiment ≠ real decision
 
-| | Experimento | Decisão real (este contrato) |
+| | Experiment | Real decision (this contract) |
 |---|---|---|
-| Mora em | `experiments/` (da instância) | **root configurável** (`runs_dir`) — default `./high-stakes-runs/` |
-| Roster | fixo (comparabilidade histórica) | floor-check por decisão, congelado no loop |
-| Ledger | não | micro-previsões × desfecho real *(não construído)* |
+| Lives in | `experiments/` (of the instance) | **configurable root** (`runs_dir`) — default `./high-stakes-runs/` |
+| Roster | fixed (historical comparability) | floor-check per decision, frozen in the loop |
+| Ledger | no | micro-predictions × real outcome *(not built)* |
 
-O **root é um parâmetro** (`runs_dir` no config): o adapter injeta o caminho da instância; o
-default é `./high-stakes-runs/`, relativo ao diretório de onde o motor foi chamado.
+The **root is a parameter** (`runs_dir` in the config): the adapter injects the instance's path; the
+default is `./high-stakes-runs/`, relative to the directory the engine was called from.
 
-## Layout (contrato)
+## Layout (contract)
 
 ```
 <root>/<YYYY-MM-DD>-<slug>/
-  README.md          # recap + journal por rodada + auto-observação + estado (aberta/decidida/desfecho)
-  brief.md           # brief afiado + board ratificado + contrato A–F + floor-check (por-que-vs-default)
-  manifest.yaml      # machine-readable: roster congelado, dims E1, formas A–F, rounds[] (data/custo/sha)
-  inputs/            # GITIGNORED (sensível) — assets crus + MDs de extração
-    MANIFEST.md      # TRACKED: sha256 + origem + path no backup (Drive) de cada asset
-  research/          # deep research — TRACKED (fonte externa, não-sensível por natureza)
+  README.md          # recap + per-round journal + self-observation + state (open/decided/outcome)
+  brief.md           # sharpened brief + ratified board + A–F contract + floor-check (why-vs-default)
+  manifest.yaml      # machine-readable: frozen roster, E1 dims, A–F forms, rounds[] (date/cost/sha)
+  inputs/            # GITIGNORED (sensitive) — raw assets + extraction MDs
+    MANIFEST.md      # TRACKED: sha256 + origin + backup path (Drive) of each asset
+  research/          # deep research — TRACKED (external source, non-sensitive by nature)
   rounds/
     r1/
-      cells/         # FULL LOG — texto integral por célula + material de trabalho do Chairman
-      cards/         # SoR estruturado (dual-emit)
-      report.md      # SoR do dossiê
-      report.html    # snapshot CONGELADO (procedência do que foi lido/enviado)
-      report.pdf     # idem (⌘P → PDF)
-    r2/ … + delta.md # resolvido/novo/reaparecido vs rodada anterior (não construído)
-  ledger.md          # micro-previsões × desfecho, atualizado ao longo de meses (não construído)
+      cells/         # FULL LOG — full text per cell + the Chairman's working material
+      cards/         # structured SoR (dual-emit)
+      report.md      # the dossier's SoR
+      report.html    # FROZEN snapshot (provenance of what was read/sent)
+      report.pdf     # same (⌘P → PDF)
+    r2/ … + delta.md # resolved/new/reappeared vs the previous round (not built)
+  ledger.md          # micro-predictions × outcome, updated over months (not built)
 ```
 
-## As decisões de contrato (fechadas 17/Jul)
+## The contract decisions (closed Jul 17)
 
-1. **Inputs sensíveis: gitignored; backup canônico = fora do git (Drive).** `inputs/MANIFEST.md`
-   (tracked) carrega **sha256 + origem + path do backup** de cada asset — mesmo sem os bytes no git,
-   você SABE o que falta e VALIDA o que recuperou. *(Resolve o H-D1: assets local-only fazem backfill
-   nesta convenção.)*
-2. **HTML/PDF committados como snapshot CONGELADO por rodada.** Não contradiz "HTML é render, não SoR":
-   o snapshot é PROCEDÊNCIA (o artefato exato sobre o qual se decidiu), não fonte. Só o render final por
-   rodada; nunca intermediários. MD regenera; HTML/PDF registram.
-3. **Um diretório por run, não repo por run** (repo por run fragmenta histórico; gitignore + backup já
-   isola o peso dos assets).
-4. **Rodadas imutáveis em subdirs** (`rounds/rN/`) + `delta.md` gerado por diff card-a-card contra a
-   rodada anterior — resolvido / novo / reaparecido. *(O gerador do delta ainda não existe; o
-   contrato de disco está aqui para quando existir.)*
-5. **`cells/` = full log por rodada.** Texto integral de cada célula + material de trabalho do Chairman
-   antes do digest. Sem isso, o drill-down do contrato lossless (o digest linka aos cards crus) morre na
-   2ª camada.
-6. **`brief.md` + journal no README.** `brief.md` = o que o fluxo interativo ratificou (brief
-   afiado, board aprovado, contrato A–F, resultado do floor-check com por-que-mudou-vs-default);
-   `manifest.yaml` = a versão machine-readable do congelamento; README = journal (1 entrada/rodada:
-   data, o que mudou, custo) + um campo de **auto-observação**: "li o mapa inteiro ou pulei direto
-   para a recomendação?". Quem decide pular sistematicamente está usando o motor como oráculo, que é
-   o modo em que ele não vale o custo.
+1. **Sensitive inputs: gitignored; canonical backup = outside git (Drive).** `inputs/MANIFEST.md`
+   (tracked) carries the **sha256 + origin + backup path** of each asset — even without the bytes in
+   git, you KNOW what is missing and VALIDATE what you recovered. *(Resolves H-D1: local-only assets
+   backfill into this convention.)*
+2. **HTML/PDF committed as a FROZEN snapshot per round.** It does not contradict "HTML is render, not SoR":
+   the snapshot is PROVENANCE (the exact artifact that was decided on), not source. Only the final
+   render per round; never intermediates. MD regenerates; HTML/PDF record.
+3. **One directory per run, not a repo per run** (a repo per run fragments history; gitignore + backup
+   already isolates the assets' weight).
+4. **Immutable rounds in subdirs** (`rounds/rN/`) + `delta.md` generated by a card-by-card diff
+   against the previous round — resolved / new / reappeared. *(The delta generator does not exist
+   yet; the disk contract is here for when it does.)*
+5. **`cells/` = the full log per round.** The full text of each cell + the Chairman's working material
+   before the digest. Without it, the lossless contract's drill-down (the digest links to the raw
+   cards) dies at the 2nd layer.
+6. **`brief.md` + journal in the README.** `brief.md` = what the interactive flow ratified (sharpened
+   brief, approved board, A–F contract, floor-check result with why-it-changed-vs-default);
+   `manifest.yaml` = the machine-readable version of the freeze; README = journal (1 entry/round:
+   date, what changed, cost) + a **self-observation** field: "did I read the whole map, or did I
+   skip straight to the recommendation?". Whoever decides to skip systematically is using the engine
+   as an oracle, which is the mode in which it is not worth its cost.
 
-## Chave `sensitivity` — run sensível não vaza pelos derivados
-> **Failure mode:** um run sobre decisão sensível (M&A, saúde, jurídico) grava as CÉLULAS e o REPORT
-> tracked → o número sigiloso vaza pelo git mesmo com `inputs/` gitignored.
+## The `sensitivity` key — a sensitive run does not leak through its derivatives
+> **Failure mode:** a run on a sensitive decision (M&A, health, legal) writes the CELLS and the REPORT
+> tracked → the confidential number leaks through git even with `inputs/` gitignored.
 
-O contrato carrega um **knob `sensitivity`** (default: não-sensível). Quando **sensível**, o caminho dos
-insumos e derivados que carregam o dado bruto segue a mesma regra do `inputs/`:
-- **gitignored + backup fora do git (Drive) + sha256 no MANIFEST.** Vale pra `inputs/`, `cells/`,
-  `research/` e os `report.*` que embutem o dado sensível.
-- **Só `README.md` + `manifest.yaml` ficam tracked** (o esqueleto: estado, journal, hashes, roster —
-  sem o conteúdo sensível).
-- O adapter é quem materializa o gitignore da instância; o core declara O QUE é sensível.
+The contract carries a **`sensitivity` knob** (default: non-sensitive). When **sensitive**, the path of
+the inputs and of the derivatives that carry the raw data follows the same rule as `inputs/`:
+- **gitignored + backup outside git (Drive) + sha256 in the MANIFEST.** Applies to `inputs/`, `cells/`,
+  `research/` and the `report.*` that embed the sensitive data.
+- **Only `README.md` + `manifest.yaml` stay tracked** (the skeleton: state, journal, hashes, roster —
+  without the sensitive content).
+- The adapter is what materializes the instance's gitignore; the core declares WHAT is sensitive.
 
-## Manifesto por rodada — cada rodada é um snapshot dos próprios insumos
-> **Failure mode:** o delta v1→v2 fica contaminado se o slug foi re-roteado (provider diferente) ou o
-> insumo mudou embaixo (mesmo arquivo, bytes diferentes) — o delta mede infra/insumo, não a decisão.
+## Per-round manifest — each round is a snapshot of its own inputs
+> **Failure mode:** the v1→v2 delta gets contaminated if the slug was re-routed (different provider) or
+> the input changed underneath (same file, different bytes) — the delta measures infra/input, not the decision.
 
-`manifest.yaml` por rodada carrega, além do roster congelado / dims E1 / formas A–F:
-- **slug + provider efetivo** de cada modelo (o que REALMENTE rodou, não o pedido);
-- **data + parâmetros** do run;
-- **sha256 do brief E do evidence pack** daquela rodada.
+Per round, `manifest.yaml` carries, beyond the frozen roster / E1 dims / A–F forms:
+- **the effective slug + provider** of each model (what ACTUALLY ran, not what was requested);
+- **date + parameters** of the run;
+- **the sha256 of the brief AND of the evidence pack** for that round.
 
-Assim cada rodada é um **snapshot completo dos próprios insumos** — o delta só é comparável entre
-rodadas cujos hashes de insumo batem (ou cuja diferença é declarada). É o que torna o loop reprodutível.
+This makes each round a **complete snapshot of its own inputs** — the delta is only comparable between
+rounds whose input hashes match (or whose difference is declared). It is what makes the loop reproducible.
 
-## Iteração ao longo do tempo (uso 2)
-Rodada nova = **mesmos juízes** (invariante do floor-check: roster congela pelo loop; fresco só em
-decisão nova). Evidência nova entra por `inputs/` (+ MANIFEST atualizado) e `brief.md` (delta do
-contexto); o motor roda, grava `rounds/rN/` imutável, gera `delta.md` vs r(N-1). O `ledger.md` atravessa
-rodadas: cards com `falsifier` viram micro-previsões checadas contra o outcome real — calibração
-acumulada. *(O acumulador ainda não existe; o gatilho para construí-lo é a 1ª decisão com
-desfecho registrado.)*
+## Iteration over time (use 2)
+A new round = **the same judges** (the floor-check invariant: the roster freezes for the loop; fresh
+only on a new decision). New evidence enters via `inputs/` (+ updated MANIFEST) and `brief.md` (context
+delta); the engine runs, writes an immutable `rounds/rN/`, generates `delta.md` vs r(N-1). The
+`ledger.md` spans rounds: cards with a `falsifier` become micro-predictions checked against the real
+outcome — accumulated calibration. *(The accumulator does not exist yet; the trigger to build it is
+the 1st decision with a recorded outcome.)*
 
-## O que este contrato NÃO muda
-Nada no motor. É camada de persistência por cima do que o motor já produz e do que os gates já
-ratificam.
+## What this contract does NOT change
+Nothing in the engine. It is a persistence layer on top of what the engine already produces and what
+the gates already ratify.
 
-**Três coisas aqui têm contrato mas não têm build** — estão marcadas como tal em cada ocorrência
-acima, e é assim que devem ser tratadas: o delta entre rodadas, o ledger de previsões × desfecho, e
-o campo de auto-observação no README. Descrever contrato como se fosse build é a falha que este
-aviso existe para impedir.
+**Three things here have a contract but no build** — they are marked as such at each occurrence
+above, and that is how they must be treated: the delta between rounds, the predictions × outcome
+ledger, and the self-observation field in the README. Describing contract as if it were build is
+the failure this notice exists to prevent.

@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""render_dossier.py — render físico do dossiê: report.md (SoR) → single-file HTML.
+"""render_dossier.py — physical render of the dossier: report.md (SoR) → single-file HTML.
 
-Camada "Físico" do contrato (output-contract.md): responsabilidade do ADAPTER, código no engine
-(deliverables são dados, não código — nada de renderer copiado por run). CSS vem DIRETO do sample
-de referência (assets/dossier.css) — fonte única; sem cópias de CSS por run.
+The "Physical" layer of the contract (output-contract.md): the ADAPTER's responsibility, code in the
+engine (deliverables are data, not code — no renderer copied per run). CSS comes STRAIGHT from the
+reference sample (assets/dossier.css) — single source; no per-run CSS copies.
 
-Uso: python3 render_dossier.py <report.md> [out.html]
-  - out default: <report.md com sufixo .html>
-  - lead/rodada derivados do path (rounds/rN) e da data do run dir; título = H1 do report.
-Compartilha com render_gate.py o shape de quote atribuída (ATTRIB_RE) — gate e render nunca
-divergem sobre o que é uma atribuição.
+Usage: python3 render_dossier.py <report.md> [out.html]
+  - out default: <report.md with an .html suffix>
+  - lead/round derived from the path (rounds/rN) and the run dir date; title = the report's H1.
+Shares the attributed-quote shape (ATTRIB_RE) with render_gate.py — gate and render never
+disagree about what an attribution is.
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ import re
 import sys
 from pathlib import Path
 
-from .render_gate import ATTRIB_RE  # shape compartilhado gate↔render
+from .render_gate import ATTRIB_RE  # shared gate↔render shape
 
 from . import paths
 
@@ -36,26 +36,26 @@ h2{margin-top:2.4em}
 table{font-size:.88em}
 """
 
-NAV = ('<a href="#s0">Resumo</a><a href="#s0b">Escopo</a><a href="#s1">1 Convergentes</a>'
-       '<a href="#s2">2 Forks</a><a href="#s3">3 Únicas</a><a href="#s4">4 Conselho</a>'
-       '<a href="#s5">5 Agenda</a><a href="#s6">6 Síntese</a><a href="#s7">7 Apêndice</a>')
+NAV = ('<a href="#s0">Summary</a><a href="#s0b">Scope</a><a href="#s1">1 Convergent</a>'
+       '<a href="#s2">2 Forks</a><a href="#s3">3 Unique</a><a href="#s4">4 Board</a>'
+       '<a href="#s5">5 Agenda</a><a href="#s6">6 Synthesis</a><a href="#s7">7 Appendix</a>')
 
 
 def load_css() -> str:
-    """CSS empacotado com o código — sempre existe. Antes era extraído por regex do
-    HTML de exemplo, que é doc: quem instalasse sem o `examples/` quebrava no render,
-    já com o painel pago. O exemplo continua existindo, mas só como âncora procedural do gate de render."""
+    """CSS packaged with the code — always exists. It used to be extracted by regex from the
+    example HTML, which is doc: anyone installing without `examples/` would break at render,
+    with the panel already paid for. The example still exists, but only as the render gate's procedural anchor."""
     return CSS_PATH.read_text()
 
 
 def derive_lead(report: Path) -> str:
-    """'Dossiê da Decisão · rodada N · <slug do run>' a partir do layout run-persistence."""
+    """'Decision Dossier · round N · <run slug>' from the run-persistence layout."""
     parts = report.resolve().parts
     round_ = next((p for p in parts if re.fullmatch(r"r\d+", p)), None)
     run_dir = next((p for p in parts if re.match(r"\d{4}-\d{2}-\d{2}-", p)), None)
-    bits = ["Dossiê da Decisão"]
+    bits = ["Decision Dossier"]
     if round_:
-        bits.append(f"rodada {round_[1:]}")
+        bits.append(f"round {round_[1:]}")
     if run_dir:
         bits.append(run_dir)
     return " · ".join(bits)
@@ -99,7 +99,7 @@ def render_body(md: str, lead: str) -> list[str]:
             close()
             title = ln[3:]
             m = re.match(r"§(\d)", title)
-            sid = f"s{m.group(1)}" if m else ("s0b" if "Escopo" in title else "sx")
+            sid = f"s{m.group(1)}" if m else ("s0b" if "Scope" in title else "sx")
             out.append(f'<h2 id="{sid}"><span class="secnum">{inline(title)}</span></h2>')
         elif ln.startswith("### "):
             close()
@@ -110,13 +110,13 @@ def render_body(md: str, lead: str) -> list[str]:
             tag = inline(t.split(" ")[0]) if m else ""
             out.append(f'<h3 id="{aid}"><span class="idtag">{tag}</span> {head}</h3>')
         elif ln.startswith("> "):
-            close("ul", "tab")  # quote fecha tabela/lista abertas (bug do v1: não fechava)
+            close("ul", "tab")  # a quote closes any open table/list (v1 bug: it didn't close them)
             body = ln[2:]
             if not state["q"]:
                 out.append('<blockquote class="quote">')
                 state["q"] = True
             if ATTRIB_RE.search(ln):
-                mq = re.match(r"(.*?)\s*—\s*\*\*(.+?)\*\*\s*(\((?:via|lente simulada)[^)]*\))?\s*$",
+                mq = re.match(r"(.*?)\s*—\s*\*\*(.+?)\*\*\s*(\((?:via|simulated lens)[^)]*\))?\s*$",
                               body)
                 if mq:
                     out.append(f'{inline(mq.group(1))}<span class="who">{inline(mq.group(2))} '
@@ -128,7 +128,7 @@ def render_body(md: str, lead: str) -> list[str]:
             state["tab"] = True
             tabrows.append([c.strip() for c in ln.strip("|").split("|")])
         elif ln.startswith("- "):
-            close("tab", "q")  # lista fecha tabela aberta (bug do v1: não fechava)
+            close("tab", "q")  # a list closes any open table (v1 bug: it didn't close it)
             if not state["ul"]:
                 out.append("<ul>")
                 state["ul"] = True
@@ -141,16 +141,16 @@ def render_body(md: str, lead: str) -> list[str]:
         else:
             close("tab", "q")
             cls = ""
-            # Aceita as DUAS ordens (`**🐂 …` e `🐂 **…`): o gate estrutural só exige a
-            # presença do emoji, então casar só uma ordem faria o dossiê passar no gate e
-            # perder o bloco visual em silêncio.
+            # Accepts BOTH orders (`**🐂 …` and `🐂 **…`): the structural gate only requires the
+            # presence of the emoji, so matching a single order would let the dossier pass the
+            # gate and silently lose the visual block.
             if re.match(r"(\*\*\s*)?🐂", ln):
                 cls = ' class="side bull"'
             elif re.match(r"(\*\*\s*)?🐻", ln):
                 cls = ' class="side bear"'
             elif re.match(r'^\*["“]', ln) and ln.rstrip().endswith(('"*', '”*')):
                 cls = ' class="thesis"'
-            elif ln.startswith("**Em uma frase"):
+            elif ln.startswith("**In one sentence"):
                 cls = ' class="verdict-line"'
             out.append(f"<p{cls}>{inline(ln)}</p>")
     close()
@@ -160,9 +160,9 @@ def render_body(md: str, lead: str) -> list[str]:
 def render(report: Path, out_path: Path | None = None) -> Path:
     md = report.read_text()
     body = render_body(md, derive_lead(report))
-    page = (f'<!DOCTYPE html><html lang="pt-BR" data-theme="light"><head><meta charset="UTF-8">'
+    page = (f'<!DOCTYPE html><html lang="en" data-theme="light"><head><meta charset="UTF-8">'
             f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
-            f'<title>Dossiê da Decisão · high-stakes</title>'
+            f'<title>Decision Dossier · high-stakes</title>'
             f'<style>{load_css()}\n{EXTRA_CSS}</style></head><body><nav>{NAV}</nav>'
             f'<main class="wrap" style="max-width:880px;margin:0 auto;padding:22px 20px 90px">'
             f'{chr(10).join(body)}</main></body></html>')
@@ -173,11 +173,11 @@ def render(report: Path, out_path: Path | None = None) -> Path:
 
 def main() -> int:
     if len(sys.argv) not in (2, 3):
-        print("uso: render_dossier.py <report.md> [out.html]")
+        print("usage: render_dossier.py <report.md> [out.html]")
         return 2
     report = Path(sys.argv[1])
     if not report.exists():
-        print(f"report não existe: {report}")
+        print(f"report does not exist: {report}")
         return 1
     out = render(report, Path(sys.argv[2]) if len(sys.argv) == 3 else None)
     print(f"render ok: {out} ({out.stat().st_size // 1000} KB)")

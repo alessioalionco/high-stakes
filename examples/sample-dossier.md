@@ -1,446 +1,453 @@
-# Meridian — migrar de preço por assento para híbrido no ciclo de renovação?
-
-> **Exemplo sintético.** Empresa, números, conselheiros e citações são inventados para
-> demonstrar o formato. Os conselheiros são **arquétipos fictícios** de propósito: um
-> exemplo público não deve fabricar citações atribuídas a pessoas reais.
-
-## Escopo
-
-**Decisão:** a Meridian (gestão de contratos jurídicos, US$ 12M de receita recorrente,
-240 clientes, retenção líquida de 108%) deve substituir o preço por assento por um modelo
-híbrido — plataforma fixa mais consumo por documento processado por IA — já no ciclo de
-renovação que começa em 90 dias?
-
-**Não está em escopo:** o valor da tabela nova, a estratégia de canal, e a decisão de
-construir versus comprar o motor de extração. O painel foi instruído a tratar esses três
-como dados.
-
-**Reversibilidade:** baixa dentro do ciclo. Contratos anuais assinados no modelo novo
-prendem a empresa por 12 meses; voltar atrás no meio custa credibilidade com quem já
-migrou.
-
-**Sobre os conselheiros:** são **lentes simuladas por modelos de linguagem**. Não são as
-pessoas reais, e nenhuma frase atribuída a eles neste dossiê foi dita por eles. O que a
-verificação de quotes garante é fidelidade ao que o modelo escreveu naquela lente — nada
-além disso.
-
-**Board:** 4 lentes de cobertura mais uma anti-tese, cada uma rodada contra 3 modelos de
-famílias distintas, sem que nenhuma célula visse as outras.
-
-## §0 Resumo executivo
-
-**A recomendação é migrar, mas não em 90 dias, e não para todos.** O painel convergiu
-com força incomum em um ponto: o modelo por assento já está desalinhado da entrega de
-valor, e esse desalinhamento piora a cada mês em que a IA processa mais documentos por
-usuário. O que o painel não sustenta é o cronograma. Três das quatro lentes trataram o
-prazo de 90 dias como o verdadeiro risco da decisão — não a mudança em si.
-
-**O custo de errar é assimétrico, e a assimetria aponta contra a pressa.** Migrar
-devagar custa alguns trimestres de margem que ficaria melhor. Migrar rápido e errado
-custa renovações num ciclo em que 40% da base está em janela de renovação simultânea. O
-painel foi unânime em que essas duas perdas não são da mesma ordem de grandeza, e que
-tratá-las como equivalentes é o erro de enquadramento mais provável aqui.
-
-**O ponto de maior divergência não é se, mas quem paga a conta da transição.** As lentes
-se dividiram limpo entre proteger a margem no curto prazo e proteger a previsibilidade do
-orçamento do comprador. Essa divergência é real e não se resolve por argumento — resolve
-por um dado que a Meridian tem e não olhou: a dispersão de documentos processados por
-cliente dentro de cada faixa de contrato. Se a dispersão for alta, o híbrido é urgente. Se
-for baixa, ele é cosmético e o esforço deveria ir para outro lugar.
-
-**Um risco apareceu numa lente só e sobreviveu à refutação.** O comprador de software
-jurídico é avesso a variabilidade orçamentária de um jeito que não se explica por
-economia — se explica por como o orçamento dele é aprovado internamente. Um modelo de
-consumo pode ser racionalmente melhor para o cliente e ainda assim ser rejeitado, porque
-quem assina não é quem usa. Nenhuma outra lente levantou isso, e a refutação não conseguiu
-derrubá-lo.
-
-**O que muda a recomendação:** um piso de consumo alto o bastante para que a fatura de
-90% dos clientes fique dentro de uma faixa previsível transforma o híbrido de aposta em
-não-evento comercial. Sem esse piso, a decisão vira um teste de tolerância a variância
-num segmento que historicamente não tem nenhuma. Este é o item que o painel colocaria na
-frente de tudo.
-
-**Como ler este dossiê:** §1 traz onde as lentes concordaram e por quê o mecanismo do dano
-é o mesmo; §2 traz as duas divergências, com os dois lados defendidos na voz de quem os
-defendeu; §3 traz o que apareceu numa lente só; §4 traz cada conselheiro por inteiro.
-Convergência aqui **não é prova** — modelos parecidos erram junto, e três lentes
-concordando pode ser um único erro repetido três vezes.
-
-## §1 Convergentes
-
-### 1.1 O preço por assento já está desalinhado da entrega de valor
-
-As quatro lentes chegaram ao mesmo diagnóstico por caminhos diferentes, o que é o tipo de
-convergência que vale mais: não é a mesma cadeia de raciocínio repetida, são cadeias
-independentes terminando no mesmo lugar. O mecanismo do dano é direto — o custo de servir
-cresce com documentos processados, a receita cresce com cadeiras ocupadas, e as duas curvas
-descolaram quando a extração automática passou a substituir trabalho humano em vez de
-apoiá-lo.
-
-> "Você está cobrando pela cadeira num produto que o cliente comprou justamente para
-> precisar de menos gente na cadeira. Isso não é um problema de precificação, é uma
-> contradição no modelo." — **A Operadora de Margem** (lente simulada · GPT-5.6 Sol)
-O que dá peso a este item é que ele é verificável hoje, sem pesquisa nova. A Meridian tem
-a telemetria de documentos processados e a base de contratos; cruzar as duas responde se o
-descolamento é teórico ou já está na margem. Duas lentes apontaram que essa checagem
-deveria preceder qualquer decisão, e que ela custa dias, não trimestres.
-
-### 1.2 O prazo de 90 dias é o risco dominante, não a mudança
-
-Três lentes trataram o cronograma como o verdadeiro objeto da decisão. O argumento comum:
-uma mudança de modelo de preço não falha por estar errada, falha por ser comunicada mal, e
-90 dias não dão tempo para descobrir que a comunicação está ruim antes de ela alcançar a
-base inteira.
-
-> "Mudança de preço não morre no spreadsheet. Morre na primeira ligação em que o cliente
-> pergunta 'quanto eu vou pagar em março?' e o vendedor não sabe responder." — **O Advogado do Cliente** (lente simulada · Grok-4.5)
-A concentração de renovações agrava o problema de um jeito específico: com 40% da base
-renovando na mesma janela, não há grupo de controle natural. A empresa descobre que errou
-depois de já ter errado com quase metade da receita, e sem um contrafactual para saber o
-tamanho do erro. Uma lente chamou isso de "testar o paraquedas depois de pular".
-
-### 1.3 Sem piso de consumo, o modelo transfere variância para quem menos a tolera
-
-O consenso aqui foi menos sobre economia e mais sobre comportamento do comprador. Um
-modelo puro de consumo é mais justo em média e pior na cauda — e o comprador jurídico
-compra para não ter cauda.
-
-> "Justo na média e imprevisível na ponta é exatamente o produto que este comprador não
-> quer. Ele paga prêmio por previsibilidade; você está propondo devolver o prêmio e ficar
-> com a variância." — **A Estrategista de Categoria** (lente simulada · GLM-5.2)
-O piso resolve a maior parte disso sem desfazer o alinhamento de valor, e foi a única
-mitigação que apareceu em mais de uma lente de forma independente. O desenho concreto —
-onde colocar o piso, e se ele é por cliente ou por faixa — ficou em aberto, e é o tipo de
-detalhe que decide se a mudança é não-evento ou crise.
-
-## §2 Divergentes
-
-### 2.1 Proteger margem agora ou previsibilidade do comprador
-
-Esta é a divergência de fundo do dossiê, e ela não se dissolve com mais análise: as duas
-posições partem de premissas diferentes sobre o que está mais escasso na Meridian hoje.
-
-🐂 **Ensaio a favor de mover agora, priorizando margem.** Cada trimestre no modelo antigo
-é margem que não volta, e o descolamento entre custo e receita acelera. A base atual foi
-vendida com uma promessa de eficiência que está sendo cumprida — clientes estão usando
-mais e pagando o mesmo. Adiar não é neutro: é escolher subsidiar o uso crescente com
-margem própria, e fazer isso por mais tempo em nome de um conforto que o cliente nem pediu.
-
-> "Cada trimestre que você adia é margem que você entrega de graça para um cliente que já
-> está feliz. Conforto do comprador é uma escolha que alguém está pagando — no caso, você."
-> — **A Operadora de Margem** (lente simulada · Kimi K3)
-🐻 **Ensaio a favor de segurar, priorizando previsibilidade.** A retenção líquida de 108%
-é o ativo mais frágil e mais valioso da empresa, e ela repousa em confiança acumulada.
-Preço é o único ponto do relacionamento em que o cliente sente que perdeu controle. Mexer
-nele numa janela de renovação concentrada, sem ter testado a comunicação, arrisca o ativo
-inteiro para ganhar pontos de margem que a empresa pode capturar depois, com menos risco.
-
-> "Margem você recupera no trimestre seguinte. Confiança de comprador jurídico você
-> recupera em anos, se recuperar. Não são grandezas trocáveis." — **O Advogado do Cliente** (lente simulada · GPT-5.6 Sol)
-**Por que divergem:** não é desacordo sobre os fatos — as duas lentes leram os mesmos
-números. É desacordo sobre qual recurso é o gargalo. Uma vê caixa e margem como restrição
-ativa; a outra vê confiança do cliente. Quem estiver certo sobre o gargalo está certo sobre
-a decisão.
+# Meridian — move from per-seat pricing to hybrid in the coming renewal cycle?
+
+> **Synthetic example.** The company, numbers, advisors, and quotes are invented to
+> demonstrate the format. The advisors are **fictional archetypes** on purpose: a public
+> example must not fabricate quotes attributed to real people.
+
+## §Scope
+
+**Decision:** should Meridian (legal contract management, US$ 12M in recurring revenue,
+240 customers, 108% net retention) replace per-seat pricing with a hybrid model — a fixed
+platform fee plus consumption per AI-processed document — in the renewal cycle that starts
+in 90 days?
+
+**Out of scope:** the price points of the new table, channel strategy, and the decision to
+build versus buy the extraction engine. The panel was instructed to treat those three as
+givens.
+
+**Reversibility:** low within the cycle. Annual contracts signed under the new model lock
+the company in for 12 months; walking it back midway costs credibility with everyone who
+already migrated.
+
+**About the advisors:** they are **lenses simulated by language models**. They
+are not the real people, and no sentence attributed to them in this dossier was said by
+them. What quote verification guarantees is fidelity to what the model wrote in that lens
+— nothing beyond that.
+
+**Board:** 4 coverage lenses plus one anti-thesis, each run against 3 models from distinct
+families, with no cell seeing the others.
+
+## §0 Executive summary
+
+**The recommendation is to migrate — but not in 90 days, and not for everyone.** The panel
+converged with unusual force on one point: the per-seat model is already misaligned with
+value delivery, and that misalignment gets worse every month the AI processes more
+documents per user. What the panel does not support is the timeline. Three of the four
+lenses treated the 90-day deadline as the real risk of the decision — not the change itself.
+
+**The cost of being wrong is asymmetric, and the asymmetry argues against haste.**
+Migrating slowly costs a few quarters of margin that could have been better. Migrating
+fast and wrong costs renewals in a cycle where 40% of the base sits in a simultaneous
+renewal window. The panel was unanimous that these two losses are not of the same order of
+magnitude, and that treating them as equivalent is the most likely framing error here.
+
+**The sharpest divergence is not whether, but who pays for the transition.** The lenses
+split cleanly between protecting near-term margin and protecting the buyer's budget
+predictability. That divergence is real and does not resolve by argument — it resolves
+with a piece of data Meridian has and has not looked at: the dispersion of documents
+processed per customer within each contract tier. If dispersion is high, the hybrid is
+urgent. If it is low, it is cosmetic and the effort should go elsewhere.
+
+**One risk surfaced in a single lens and survived refutation.** The legal-software buyer
+is averse to budget variability in a way that economics does not explain — how their
+budget gets approved internally does. A consumption model can be rationally better for the
+customer and still be rejected, because the person who signs is not the person who uses.
+No other lens raised this, and the refutation could not knock it down.
+
+**What changes the recommendation:** a consumption floor high enough that 90% of customers
+see their invoice land within a predictable band turns the hybrid from a bet into a
+commercial non-event. Without that floor, the decision becomes a test of variance
+tolerance in a segment that historically has none. This is the item the panel would put
+ahead of everything else.
+
+**How to read this dossier:** §1 covers where the lenses agreed and why the damage
+mechanism is the same; §2 covers the two forks, with both sides argued in the voice of
+whoever argued them; §3 covers what surfaced in a single lens; §4 covers each advisor in
+full. Convergence here **is not proof** — similar models fail together, and three lenses
+agreeing can be a single error repeated three times.
+
+## §1 Convergent points
+
+### 1.1 Per-seat pricing is already misaligned with value delivery
+
+All four lenses reached the same diagnosis by different routes, which is the kind of
+convergence worth more: not the same chain of reasoning repeated, but independent chains
+ending in the same place. The damage mechanism is direct — cost to serve grows with
+documents processed, revenue grows with seats filled, and the two curves came apart when
+automated extraction started replacing human work instead of assisting it.
+
+> "You're charging for the seat in a product the customer bought precisely so they'd need
+> fewer people in seats. That's not a pricing problem, it's a contradiction in the
+> model." — **The Margin Operator** (simulated lens · GPT-5.6 Sol)
+What gives this item weight is that it is verifiable today, with no new research. Meridian
+has the processed-documents telemetry and the contract base; crossing the two answers
+whether the decoupling is theoretical or already hitting margin. Two lenses noted that
+this check should precede any decision, and that it costs days, not quarters.
+
+### 1.2 The 90-day deadline is the dominant risk, not the change
+
+Three lenses treated the timeline as the real object of the decision. The shared argument:
+a pricing-model change does not fail by being wrong, it fails by being communicated badly,
+and 90 days is not enough time to discover the communication is bad before it reaches the
+entire base.
+
+> "A price change doesn't die in the spreadsheet. It dies on the first call where the
+> customer asks 'how much will I pay in March?' and the rep can't answer." — **The Customer Advocate** (simulated lens · Grok-4.5)
+The renewal concentration compounds the problem in a specific way: with 40% of the base
+renewing in the same window, there is no natural control group. The company finds out it
+was wrong after already being wrong with nearly half its revenue, and with no
+counterfactual to size the error. One lens called this "testing the parachute after
+jumping."
+
+### 1.3 Without a consumption floor, the model shifts variance onto whoever tolerates it least
+
+The consensus here was less about economics and more about buyer behavior. A pure
+consumption model is fairer on average and worse in the tail — and the legal buyer buys
+precisely to have no tail.
+
+> "Fair on average and unpredictable at the edge is exactly the product this buyer does
+> not want. He pays a premium for predictability; you're proposing to hand the premium
+> back and keep the variance." — **The Category Strategist** (simulated lens · GLM-5.2)
+The floor resolves most of this without undoing the value alignment, and it was the only
+mitigation that surfaced independently in more than one lens. The concrete design — where
+to set the floor, and whether it is per customer or per tier — was left open, and it is
+the kind of detail that decides whether the change is a non-event or a crisis.
+
+## §2 Forks
+
+### 2.1 Protect margin now or protect the buyer's predictability
+
+This is the dossier's underlying fork, and it does not dissolve with more analysis: the
+two positions start from different premises about what is scarcest at Meridian today.
+
+🐂 **Essay for moving now, prioritizing margin.** Every quarter on the old model is margin
+that never comes back, and the decoupling between cost and revenue is accelerating. The
+current base was sold on an efficiency promise that is being kept — customers are using
+more and paying the same. Delaying is not neutral: it is choosing to subsidize growing
+usage with your own margin, and to keep doing it in the name of a comfort the customer
+never even asked for.
+
+> "Every quarter you delay is margin you hand over for free to a customer who is already
+> happy. Buyer comfort is a choice someone is paying for — in this case, you."
+> — **The Margin Operator** (simulated lens · Kimi K3)
+🐻 **Essay for holding, prioritizing predictability.** The 108% net retention is the
+company's most fragile and most valuable asset, and it rests on accumulated trust. Price
+is the one point in the relationship where the customer feels they have lost control.
+Touching it in a concentrated renewal window, without having tested the communication,
+risks the entire asset to gain margin points the company can capture later, at lower risk.
+
+> "Margin you recover the next quarter. A legal buyer's trust you recover in years, if at
+> all. They are not interchangeable quantities." — **The Customer Advocate** (simulated lens · GPT-5.6 Sol)
+**Why they diverge:** it is not a disagreement about the facts — both lenses read the same
+numbers. It is a disagreement about which resource is the bottleneck. One sees cash and
+margin as the active constraint; the other sees customer trust. Whoever is right about the
+bottleneck is right about the decision.
 
-**Custo de errar por lado:** errar para o lado da margem custa renovações num ciclo
-concentrado, com efeito composto sobre a retenção líquida e sobre a próxima captação.
-Errar para o lado da previsibilidade custa dois a três trimestres de margem inferior e o
-risco de a janela competitiva fechar. O primeiro erro é mais difícil de desfazer.
-
-**O que resolve:** a dispersão de documentos processados por cliente dentro de cada faixa
-de contrato. Alta dispersão significa que o modelo atual já está cobrando errado de gente
-demais, e a urgência é real. Baixa dispersão significa que o híbrido reorganiza pouco e a
-pressa não se justifica. O dado existe e não foi consultado.
-
-### 2.2 Migrar a base inteira ou só o segmento de alto consumo — fork condicional
-
-Esta divergência é condicional: ela só existe se a resposta ao item 2.1 for "mover". Se a
-decisão for segurar, o recorte de segmento não se coloca. Por isso não há dois ensaios
-defendidos aqui — há uma pré-condição e um gatilho.
-
-**Pré-condição:** decisão de migrar tomada, com piso de consumo definido.
-
-**Gatilho:** se a dispersão medida em 2.1 se concentrar no quartil superior de uso, o
-recorte por segmento passa a dominar — migra-se quem já está fora da faixa, e o resto
-permanece no modelo antigo até a renovação natural. Se a dispersão for uniforme, o recorte
-por segmento cria dois modelos de preço convivendo sem ganho proporcional, e a migração
-ampla fica melhor.
+**Cost of being wrong per side:** erring on the margin side costs renewals in a
+concentrated cycle, with compounding effects on net retention and on the next fundraise.
+Erring on the predictability side costs two to three quarters of inferior margin and the
+risk of the competitive window closing. The first error is harder to undo.
+
+**What resolves it:** the dispersion of documents processed per customer within each
+contract tier. High dispersion means the current model is already mischarging too many
+people, and the urgency is real. Low dispersion means the hybrid reorganizes little and
+the haste is unjustified. The data exists and has not been consulted.
+
+### 2.2 Migrate the whole base or only the high-consumption segment — conditional fork
+
+This fork is conditional: it only exists if the answer to item 2.1 is "move." If the
+decision is to hold, the segment cut never comes up. That is why there are no two essays
+argued here — there is a precondition and a trigger.
+
+**Precondition:** migration decision made, with the consumption floor defined.
+
+**Trigger:** if the dispersion measured in 2.1 concentrates in the top usage quartile, the
+segment cut starts to dominate — you migrate whoever is already outside the band, and the
+rest stays on the old model until natural renewal. If dispersion is uniform, the segment
+cut creates two pricing models coexisting with no proportional gain, and the broad
+migration wins.
+
+> "Two pricing models coexisting is operational debt nobody puts in the spreadsheet and
+> everybody pays in support." — **The Category Strategist** (simulated lens · Grok-4.5)
+## §3 Unique views
 
-> "Dois modelos de preço convivendo é uma dívida operacional que ninguém coloca no
-> spreadsheet e todo mundo paga no suporte." — **A Estrategista de Categoria** (lente simulada · Grok-4.5)
-## §3 Únicas
+### 3.1 The person who approves the budget is not the person who uses the product
 
-### 3.1 Quem aprova o orçamento não é quem usa o produto
+This surfaced in a single lens, and it survived refutation — the refuter tried to reduce
+it to generic risk aversion and could not, because the proposed mechanism is structural,
+not psychological. At the corporate legal buyer, the budget is typically approved once a
+year by someone who does not use the product and whose success metric is not blowing the
+forecast. For that person, a variable invoice is not a better price — it is a career
+risk.
+
+**Why it matters:** because it flips the sign of the economic analysis. A model that is
+rationally cheaper for the customer company can be rejected by the approver, and the
+rejection shows up in no value model. If this mechanism is real, the consumption floor
+stops being a mitigation and becomes the product: what you sell is the predictability,
+with the consumption behind it.
 
-Apareceu numa lente só, e sobreviveu à refutação — o refutador tentou reduzi-la a
-aversão genérica a risco e não conseguiu, porque o mecanismo proposto é estrutural, não
-psicológico. No comprador jurídico corporativo, o orçamento costuma ser aprovado uma vez
-ao ano por alguém que não usa o produto e cuja métrica de sucesso é não estourar a
-previsão. Para essa pessoa, uma fatura variável não é um preço melhor — é um risco de
-carreira.
+**Testability:** high and cheap. Five conversations with budget approvers — not users —
+asking how a variable invoice would enter their approval process. If three or more
+describe structural friction, the mechanism is confirmed and the design changes. It costs
+a week.
 
-**Por que importa:** porque inverte o sinal da análise econômica. Um modelo que é
-racionalmente mais barato para a empresa cliente pode ser rejeitado pelo aprovador, e a
-rejeição não aparece em nenhuma modelagem de valor. Se este mecanismo for real, o piso de
-consumo deixa de ser uma mitigação e vira o produto: o que se vende é a previsibilidade,
-com o consumo por trás dela.
+### 3.2 The extraction engine can become hostage to the price
 
-**Testabilidade:** alta e barata. Cinco conversas com aprovadores de orçamento — não com
-usuários — perguntando como uma fatura variável entraria no processo de aprovação deles.
-Se três ou mais descreverem fricção estrutural, o mecanismo está confirmado e o desenho
-muda. Custa uma semana.
+One lens noted that tying revenue to documents processed creates a perverse internal
+incentive: the product team acquires a reason not to improve extraction efficiency,
+because higher efficiency means fewer billable documents for the same customer work.
 
-### 3.2 O motor de extração pode virar refém do preço
+**Why it matters:** it is a medium-term risk that does not show up in the first year and
+is expensive to undo later, because it requires reopening the price all over again.
+Companies that fell into this discovered too late that the revenue model was fighting the
+roadmap.
 
-Uma lente notou que amarrar receita a documentos processados cria um incentivo interno
-perverso: a equipe de produto passa a ter razão para não melhorar a eficiência da extração,
-porque eficiência maior significa menos documentos faturáveis para o mesmo trabalho do
-cliente.
+**Testability:** medium. It cannot be observed before it happens, but it can be designed
+against: defining the billable unit in terms of value delivered to the customer (contract
+analyzed) instead of work consumed (pages processed) disarms the incentive at the source.
+The choice of unit is reversible today and expensive later.
 
-**Por que importa:** é um risco de médio prazo que não aparece no primeiro ano e é caro de
-desfazer depois, porque exige remexer no preço de novo. Empresas que caíram nisso
-descobriram tarde que o modelo de receita estava brigando com o roadmap.
+## §4 The board
 
-**Testabilidade:** média. Não dá para observar antes de acontecer, mas dá para desenhar
-contra: definir a unidade faturável em termos de valor entregue ao cliente (contrato
-analisado) em vez de trabalho consumido (páginas processadas) desarma o incentivo na
-origem. A escolha da unidade é reversível hoje e cara depois.
+### 4.1 The Margin Operator
 
-## §4 Pareceres
+*"Buyer comfort is a choice, and someone is paying for it."*
 
-### 4.1 A Operadora de Margem
+This lens reads Meridian as subsidizing growing usage with its own margin and calling it
+retention. The 108% net retention looks healthy until you ask how much of it comes from
+seat expansion versus how much comes from customers using far more for the same price. If
+it is mostly the latter, the number is measuring tolerance, not value captured, and it
+will get worse on its own as the product improves.
 
-*"Conforto do comprador é uma escolha, e alguém está pagando por ela."*
+The opinion does not treat the 90-day deadline as a serious problem, and this is where it
+diverges from the rest of the panel. The argument is that the communication cost is fixed
+and does not shrink with time — delaying only postpones the discomfort, while the lost
+margin is permanent.
+
+**Questions:** How much of net retention comes from seat expansion? · What is the gross
+margin per customer in the top usage decile? · In how many months does inference cost
+overtake incremental revenue at the current pace? · Was the new price table tested against
+the installed base or only against new customers?
 
-A leitura desta lente é que a Meridian está subsidiando uso crescente com margem própria e
-chamando isso de retenção. A retenção líquida de 108% parece saudável até se perguntar
-quanto dela vem de expansão de assentos versus quanto vem de clientes usando muito mais
-pelo mesmo preço. Se for majoritariamente o segundo, o número está medindo tolerância, não
-valor capturado, e vai piorar sozinho conforme o produto melhora.
+**Suggestions:** Measure usage dispersion before anything else · Set the consumption
+floor at the 90th percentile of the base, not the average · Separate the platform price
+from the consumption price in the communication, even if the invoice is single.
 
-O parecer não trata o prazo de 90 dias como problema sério, e é aqui que ele diverge do
-resto do painel. O argumento é que o custo de comunicação é fixo e não diminui com tempo —
-adiar só adia o desconforto, enquanto a margem perdida é permanente.
+**Strip:** margin 4/5 · urgency 4/5 · execution risk 2/5.
 
-**Perguntas:** Quanto da retenção líquida vem de expansão de assentos? · Qual a margem
-bruta por cliente no decil superior de uso? · Em quantos meses o custo de inferência
-ultrapassa a receita incremental no ritmo atual? · A tabela nova foi testada contra a base
-instalada ou só contra clientes novos?
+**In one sentence:** the current model is wrong and gets worse on its own, so the only
+honest argument for delaying is execution risk — which this lens considers overestimated.
 
-**Sugestões:** Medir a dispersão de uso antes de qualquer coisa · Definir o piso de
-consumo pelo percentil 90 da base, não pela média · Separar o preço de plataforma do preço
-de consumo na comunicação, mesmo que a fatura seja única.
+### 4.2 The Customer Advocate
 
-**Strip:** margem 4/5 · urgência 4/5 · risco de execução 2/5.
+*"Margin comes back next quarter; trust comes back in years, if it comes back at all."*
 
-**Em uma frase:** o modelo atual está errado e piora sozinho, então o único argumento
-honesto para adiar é o risco de execução — que esta lente considera superestimado.
+This lens agrees that the model must change and disagrees head-on with the timeline. The
+central reasoning is about risk concentration: with 40% of the base renewing in the same
+window, Meridian loses the ability to learn from the first mistakes before they reach
+most of the revenue. It is not an objection to the change, it is an objection to making it
+without a control group.
 
-### 4.2 O Advogado do Cliente
+The concrete recommendation is to stagger by renewal window rather than by segment —
+start with the contracts that expire latest, learn from them, and arrive at the
+concentrated window with the communication already tested. It costs two quarters and buys
+the information the current timeline does not allow.
 
-*"Margem volta no trimestre seguinte; confiança volta em anos, se voltar."*
+**Questions:** How many customers would see their invoice rise more than 20% under the new
+model? · Can the sales team answer "how much will I pay in March" today? · Is there a cap
+clause in current contracts that blocks the migration? · Who in the base is a reference
+for the others?
 
-Esta lente concorda que o modelo precisa mudar e discorda frontalmente do cronograma. O
-raciocínio central é sobre concentração de risco: com 40% da base renovando na mesma
-janela, a Meridian perde a capacidade de aprender com os primeiros erros antes que eles
-alcancem a maior parte da receita. Não é uma objeção à mudança, é uma objeção a fazê-la
-sem grupo de controle.
+**Suggestions:** Stagger by renewal window, not by segment · Offer an invoice cap in the
+first year to whoever migrates early · Train the sales team on the variance conversation
+before announcing, not after.
 
-A recomendação concreta é escalonar por janela de renovação em vez de por segmento —
-começar pelos contratos que vencem mais tarde, aprender com eles, e chegar na janela
-concentrada com a comunicação já testada. Custa dois trimestres e compra a informação que
-o cronograma atual não permite ter.
+**Strip:** churn risk 4/5 · urgency 2/5 · execution risk 4/5.
 
-**Perguntas:** Quantos clientes veriam a fatura subir mais de 20% no modelo novo? · O time
-comercial consegue responder "quanto vou pagar em março" hoje? · Existe cláusula de teto
-nos contratos atuais que impeça a migração? · Quem, na base, é referência para os outros?
+**In one sentence:** the change is right and the calendar is wrong, and the calendar is
+what will determine the outcome.
 
-**Sugestões:** Escalonar por janela de renovação, não por segmento · Oferecer teto de
-fatura no primeiro ano para quem migrar cedo · Treinar o time comercial na conversa de
-variância antes de anunciar, não depois.
+### 4.3 The Category Strategist
 
-**Strip:** risco de churn 4/5 · urgência 2/5 · risco de execução 4/5.
+*"The market will read this change as a signal, not as a price table."*
 
-**Em uma frase:** a mudança está certa e o calendário está errado, e o calendário é o que
-vai determinar o resultado.
+This lens focuses on how the change is interpreted by whoever is not a customer:
+competitors, analysts, and prospects. Moving to consumption at a moment when the entire
+category is debating AI pricing positions Meridian as the one who charges for what it
+delivers — which is favorable. But doing it in a rush and then retreating positions it as
+the one who does not know what it is selling, which is worse than never having moved.
 
-### 4.3 A Estrategista de Categoria
+The lens also raises the operational debt of keeping two models coexisting, which tends
+to be underestimated because it appears in no spreadsheet and shows up in support, in
+billing, and in revenue forecasting.
 
-*"O mercado vai ler essa mudança como sinal, não como tabela."*
+**Questions:** How do the two closest competitors price AI today? · Would the change be
+announced publicly or only at renewal? · Is there a risk of a competitor using the
+variance as a sales argument? · How long can the company afford to run two models?
 
-O foco desta lente é em como a mudança é interpretada por quem não é cliente: concorrentes,
-analistas e prospects. Migrar para consumo num momento em que a categoria inteira discute
-precificação de IA posiciona a Meridian como quem cobra pelo que entrega — o que é
-favorável. Mas fazê-lo às pressas e depois recuar posiciona como quem não sabe o que
-está vendendo, o que é pior do que não ter mexido.
+**Suggestions:** Announce the change as predictability with consumption behind it, not as
+consumption with a floor · Set the end date for the two models' coexistence before
+starting · Prepare the answer to the "unpredictable invoice" argument before the
+competitor uses it.
 
-A lente também levanta a dívida operacional de manter dois modelos convivendo, que
-costuma ser subestimada porque não aparece em nenhuma planilha e se manifesta no suporte,
-no faturamento e na previsão de receita.
+**Strip:** positioning 4/5 · urgency 3/5 · execution risk 3/5.
 
-**Perguntas:** Como os dois concorrentes mais próximos precificam IA hoje? · A mudança
-seria anunciada publicamente ou só na renovação? · Existe risco de um concorrente usar a
-variância como argumento de venda? · Quanto tempo a empresa aguenta operar dois modelos?
+**In one sentence:** the direction strengthens the company's position in the category,
+provided the execution does not turn the change into a signal of hesitation.
 
-**Sugestões:** Anunciar a mudança como previsibilidade com consumo por trás, não como
-consumo com piso · Fechar a data de fim da convivência dos dois modelos antes de começar ·
-Preparar a resposta ao argumento de "fatura imprevisível" antes que o concorrente o use.
+### 4.4 The Financial Skeptic — anti-thesis
 
-**Strip:** posicionamento 4/5 · urgência 3/5 · risco de execução 3/5.
+*"Nobody asked whether the price change solves the problem the company actually has."*
 
-**Em uma frase:** a direção fortalece a posição da empresa na categoria, desde que a
-execução não transforme a mudança em sinal de hesitação.
+The anti-thesis does not defend the current model. It questions the framing: the entire
+panel accepted that the problem is the alignment between price and value, when the
+evidence presented is equally compatible with a unit-cost-of-inference problem that
+pricing does not solve, only passes through. If the cost to serve is growing faster than
+any price table can keep up with, migrating to consumption buys time and postpones the
+hard conversation.
 
-### 4.4 O Cético Financeiro — anti-tese
+The second point is about the 108% net retention: the panel treated the number as an
+asset to protect. The anti-thesis observes that 108% in an AI product with growing
+adoption is a weak number, not a strong one — and that if it is being propped up by
+customers who use a lot and pay little, the migration will expose that all at once, and
+not as a success.
 
-*"Ninguém perguntou se a mudança de preço resolve o problema que a empresa realmente tem."*
+**In one sentence:** the pricing decision may be being used to avoid making the cost
+decision, and the entire dossier would read differently if the unit cost of inference
+were on the table.
 
-A anti-tese não defende o modelo atual. Ela questiona o enquadramento: o painel inteiro
-aceitou que o problema é o alinhamento entre preço e valor, quando a evidência apresentada
-também é compatível com um problema de custo unitário de inferência que a precificação não
-resolve, apenas repassa. Se o custo de servir estiver crescendo mais rápido que qualquer
-tabela consegue acompanhar, migrar para consumo compra tempo e adia a conversa difícil.
+## §5 Investigation agenda
 
-O segundo ponto é sobre a retenção líquida de 108%: o painel tratou o número como ativo a
-proteger. A anti-tese observa que 108% num produto de IA com adoção crescente é um número
-fraco, não forte — e que se ele estiver sendo sustentado por clientes que usam muito e
-pagam pouco, a migração vai revelar isso de uma vez, e não como sucesso.
+The scores below are **weak signal** and are labeled as such. What matters in them is the
+spread, not the level: different lenses tend to score similarly even when they disagree on
+substance, so a high number does not mean agreement. Where the spread is large, there is
+real divergence behind it — and that divergence is already described in §2, which is
+where it should be read.
 
-**Em uma frase:** a decisão de preço pode estar sendo usada para não tomar a decisão de
-custo, e o dossiê inteiro seria diferente se o custo unitário de inferência estivesse na
-mesa.
-
-## §5 Notas por lente
-
-As notas abaixo são **sinal fraco** e vão rotuladas como tal. O que importa nelas é o
-espalhamento, não o nível: lentes diferentes tendem a pontuar de forma parecida mesmo
-quando discordam no conteúdo, então um número alto não significa concordância. Onde o
-espalhamento é grande, há divergência real por trás — e essa divergência já está descrita
-em §2, que é onde ela deve ser lida.
-
-| Lente | Direção | Urgência | Risco de execução |
+| Lens | Direction | Urgency | Execution risk |
 |---|---|---|---|
-| A Operadora de Margem | migrar | 4/5 | 2/5 |
-| O Advogado do Cliente | migrar | 2/5 | 4/5 |
-| A Estrategista de Categoria | migrar | 3/5 | 3/5 |
-| O Cético Financeiro | reenquadrar | — | — |
+| The Margin Operator | migrate | 4/5 | 2/5 |
+| The Customer Advocate | migrate | 2/5 | 4/5 |
+| The Category Strategist | migrate | 3/5 | 3/5 |
+| The Financial Skeptic | reframe | — | — |
 
-O espalhamento em urgência (2 a 4) e em risco de execução (2 a 4) é o mapa da divergência
-de §2.1, e é o único conteúdo desta tabela que merece peso.
+The spread in urgency (2 to 4) and in execution risk (2 to 4) is the map of the fork in
+§2.1, and it is the only content in this table that deserves weight.
 
-## §6 Recomendação
+## §6 Chairman synthesis
 
-### 6.1 A recomendação
+### 6.1 The recommendation
 
-Migrar, com piso de consumo, escalonado por janela de renovação, e não em 90 dias. A
-direção é sustentada por convergência independente das quatro lentes; o cronograma não é
-sustentado por nenhuma delas exceto uma.
+Migrate, with a consumption floor, staggered by renewal window, and not in 90 days. The
+direction is supported by independent convergence across all four lenses; the timeline is
+supported by none of them except one.
 
-### 6.2 O que precisa ser verdade
+### 6.2 What needs to be true
 
-A recomendação depende de a dispersão de uso ser alta. Se a medição mostrar dispersão
-baixa, a urgência desaparece e o esforço deveria ir para o custo unitário — que é o ponto
-da anti-tese.
+The recommendation depends on usage dispersion being high. If the measurement shows low
+dispersion, the urgency disappears and the effort should go to unit cost — which is the
+anti-thesis's point.
 
-### 6.3 O que observar
+### 6.3 What to watch
 
-A primeira coorte escalonada é o instrumento: se a conversa de variância travar nas
-primeiras dez renovações, o problema é a comunicação e ele é corrigível. Se travar na
-aprovação de orçamento do cliente, o problema é estrutural e o desenho precisa mudar.
+The first staggered cohort is the instrument: if the variance conversation stalls in the
+first ten renewals, the problem is the communication and it is fixable. If it stalls in
+the customer's budget approval, the problem is structural and the design needs to change.
 
-### 6.4 Sugestões ranqueadas
+### 6.4 Ranked suggestions
 
-**1. Medir a dispersão de documentos processados por cliente, dentro de cada faixa de
-contrato, antes de qualquer decisão.** É o dado que resolve a divergência central do
-dossiê e a empresa já o tem — está na telemetria de produto cruzada com a base de
-contratos. O mecanismo: se o uso for muito disperso dentro de uma mesma faixa de preço, o
-modelo atual já está cobrando errado de muita gente, e a urgência da migração é real e
-mensurável. Se for uniforme, o híbrido reorganiza pouco e a pressa não se justifica. Dono:
-produto e finanças em conjunto. Gate: nenhuma decisão de cronograma antes deste número
-existir. Custa dias, não trimestres, e é a única sugestão desta lista que não pode ser
-feita em paralelo com as outras — ela precede.
+**1. Measure the dispersion of documents processed per customer, within each contract
+tier, before any decision.** It is the data point that resolves the dossier's central
+fork, and the company already has it — it sits in product telemetry crossed with the
+contract base. The mechanism: if usage is widely dispersed within a single price tier, the
+current model is already mischarging a lot of people, and the urgency of the migration is
+real and measurable. If it is uniform, the hybrid reorganizes little and the haste is
+unjustified. Owner: product and finance jointly. Gate: no timeline decision before this
+number exists. It costs days, not quarters, and it is the only suggestion on this list
+that cannot be done in parallel with the others — it comes first.
 
-**2. Definir o piso de consumo pelo percentil 90 da base instalada, não pela média.** O
-piso é o que transforma a mudança de aposta em não-evento comercial, e calibrá-lo pela
-média é o erro que anula seu propósito: metade da base ficaria acima dele e veria variância
-mesmo assim. Calibrado pelo percentil 90, nove em cada dez clientes têm fatura previsível e
-a empresa ainda captura o excedente de quem consome muito. O mecanismo é psicológico e
-orçamentário, não econômico: o que se está comprando com o piso é a ausência de conversa
-difícil na renovação. Dono: finanças. Gate: o piso precisa estar definido antes de qualquer
-comunicação ao cliente, porque a comunicação vende o piso, não o consumo.
+**2. Set the consumption floor at the 90th percentile of the installed base, not the
+average.** The floor is what turns the change from a bet into a commercial non-event, and
+calibrating it by the average is the mistake that defeats its purpose: half the base would
+sit above it and see variance anyway. Calibrated at the 90th percentile, nine out of ten
+customers get a predictable invoice and the company still captures the surplus from heavy
+consumers. The mechanism is psychological and budgetary, not economic: what the floor buys
+is the absence of a hard conversation at renewal. Owner: finance. Gate: the floor must be
+defined before any customer communication, because the communication sells the floor, not
+the consumption.
 
-**3. Escalonar por janela de renovação, começando pelos contratos que vencem mais tarde.**
-A concentração de 40% da base numa única janela elimina o grupo de controle natural, e sem
-grupo de controle a empresa descobre que errou depois de já ter errado com quase metade da
-receita. Começar pelos vencimentos distantes cria a coorte de aprendizado que o cronograma
-atual não permite: a comunicação é testada, ajustada, e só então alcança a janela
-concentrada. O custo é dois trimestres de margem inferior; o retorno é a informação. Dono:
-comercial. Gate: a janela concentrada não é tocada antes de dez renovações escalonadas
-terem sido fechadas e analisadas.
+**3. Stagger by renewal window, starting with the contracts that expire latest.** The
+concentration of 40% of the base in a single window eliminates the natural control group,
+and without a control group the company finds out it was wrong after already being wrong
+with nearly half its revenue. Starting with the distant expirations creates the learning
+cohort the current timeline does not allow: the communication gets tested, adjusted, and
+only then reaches the concentrated window. The cost is two quarters of inferior margin;
+the return is the information. Owner: sales. Gate: the concentrated window is not touched
+before ten staggered renewals have been closed and analyzed.
 
-**4. Entrevistar cinco aprovadores de orçamento — não usuários — sobre como uma fatura
-variável entraria no processo de aprovação deles.** Este é o teste do risco de §3.1, que
-apareceu numa lente só e sobreviveu à refutação. O mecanismo é estrutural: quem aprova
-orçamento em comprador jurídico costuma ser avaliado por não estourar a previsão, e para
-essa pessoa variabilidade é risco de carreira, não preço melhor. Se três ou mais
-descreverem fricção estrutural no processo, o piso deixa de ser mitigação e vira o produto
-— a comunicação inteira muda de eixo. Dono: comercial ou pesquisa. Gate: resultado na mesa
-antes de fechar a mensagem de lançamento. Custa uma semana.
+**4. Interview five budget approvers — not users — about how a variable invoice would
+enter their approval process.** This is the test of the §3.1 risk, which surfaced in a
+single lens and survived refutation. The mechanism is structural: whoever approves budget
+at a legal buyer tends to be evaluated on not blowing the forecast, and for that person
+variability is a career risk, not a better price. If three or more describe structural
+friction in the process, the floor stops being a mitigation and becomes the product — the
+entire communication changes axis. Owner: sales or research. Gate: results on the table
+before the launch message is locked. It costs a week.
 
-**5. Definir a unidade faturável em termos de valor entregue, não de trabalho consumido.**
-Faturar por página processada cria um incentivo interno para não melhorar a eficiência da
-extração, porque eficiência maior significa menos unidades faturáveis pelo mesmo valor
-entregue ao cliente. Faturar por contrato analisado desarma isso na origem: o produto pode
-ficar arbitrariamente mais eficiente sem que a receita caia. O risco é de médio prazo, não
-aparece no primeiro ano, e é caro de desfazer porque exige mexer no preço outra vez. Dono:
-produto. Gate: a escolha da unidade é reversível agora e cara depois — decidir antes do
-lançamento, não durante.
+**5. Define the billable unit in terms of value delivered, not work consumed.** Billing
+per page processed creates an internal incentive not to improve extraction efficiency,
+because higher efficiency means fewer billable units for the same value delivered to the
+customer. Billing per contract analyzed disarms this at the source: the product can get
+arbitrarily more efficient without revenue falling. The risk is medium-term, does not
+appear in the first year, and is expensive to undo because it requires touching the price
+yet again. Owner: product. Gate: the choice of unit is reversible now and expensive later
+— decide before launch, not during.
 
-### 6.5 O que este dossiê não resolve
+### 6.5 What this dossier does not resolve
 
-O custo unitário de inferência, levantado pela anti-tese, ficou fora de escopo por
-instrução e é o item com maior potencial de inverter a recomendação. Se ele estiver
-crescendo mais rápido do que qualquer tabela acompanha, a decisão de preço está sendo
-usada para adiar a decisão de custo. O painel não tinha os dados para julgar isso.
+The unit cost of inference, raised by the anti-thesis, was out of scope by instruction
+and is the item with the greatest potential to flip the recommendation. If it is growing
+faster than any price table can track, the pricing decision is being used to postpone the
+cost decision. The panel did not have the data to judge this.
 
-Também não resolve o valor da tabela nova — apenas a arquitetura do modelo. E não avalia
-se a Meridian tem capacidade operacional de faturamento para suportar consumo, que é uma
-pergunta de engenharia, não de estratégia.
+Nor does it resolve the price points of the new table — only the architecture of the
+model. And it does not assess whether Meridian has the billing operations capacity to
+support consumption, which is an engineering question, not a strategy question.
 
-### 6.6 Falsificadores
+### 6.6 Falsifiers
 
-Cada item abaixo é uma previsão que pode ser checada, e que se falhar derruba parte deste
-dossiê. A dispersão de uso medida em 6.4.1 será alta o bastante para justificar a migração.
-Pelo menos três dos cinco aprovadores entrevistados descreverão fricção estrutural com
-fatura variável. Nas dez primeiras renovações escalonadas, menos de dois clientes pedirão
-para permanecer no modelo antigo. Se as duas primeiras falharem juntas, a recomendação
-inteira deve ser reaberta, não ajustada.
+Each item below is a prediction that can be checked, and that, if it fails, takes down
+part of this dossier. The usage dispersion measured in 6.4.1 will be high enough to
+justify the migration. At least three of the five approvers interviewed will describe
+structural friction with a variable invoice. In the first ten staggered renewals, fewer
+than two customers will ask to stay on the old model. If the first two fail together, the
+entire recommendation should be reopened, not adjusted.
 
-## §7 Honestidade de método
+## §7 Appendix
 
-**Descartados e por quê.** Três itens do painel não subiram para o corpo do dossiê. Um
-deles — a sugestão de testar preço em prospects antes da base — foi descartado porque
-prospects não têm o custo de troca que define o problema, então o teste não seria
-informativo. Outro, sobre empacotar o consumo como crédito pré-pago, foi absorvido dentro
-da sugestão do piso, que resolve o mesmo problema com menos mecânica. O terceiro era uma
-repetição do item 1.1 em outras palavras, vinda de uma segunda lente.
+**Discarded and why.** Three items from the panel did not make it into the body of the
+dossier. One of them — the suggestion to test pricing on prospects before the base — was
+discarded because prospects do not have the switching cost that defines the problem, so
+the test would not be informative. Another, about packaging consumption as prepaid
+credit, was absorbed into the floor suggestion, which solves the same problem with less
+machinery. The third was a restatement of item 1.1 in other words, coming from a second
+lens.
 
-**Onde este dossiê é fraco — a honestidade de método exige dizer isto antes que alguém pergunte.** A anti-tese não foi respondida, foi registrada — o painel não
-tinha dados de custo unitário para julgá-la, e isso é uma lacuna real, não um detalhe. A
-convergência de §1 vem de quatro lentes rodadas contra três modelos, o que reduz mas não
-elimina o risco de erro correlacionado: modelos treinados de forma parecida podem errar
-juntos, e três lentes concordando pode ser um único erro repetido. As notas de §5 são
-sinal fraco e estão rotuladas como tal no próprio texto.
+**Where this dossier is weak — method honesty requires saying this before anyone asks.** The anti-thesis was not answered, it was recorded — the panel did not
+have unit-cost data to judge it, and that is a real gap, not a detail. The convergence in
+§1 comes from four lenses run against three models, which reduces but does not eliminate
+the risk of correlated error: models trained in similar ways can fail together, and three
+lenses agreeing can be a single error repeated. The scores in §5 are weak signal and are
+labeled as such in the text itself.
 
-**A refutação e o que ela fez.** Cada item convergente e cada única passou por um passo de
-refutação em modelo de família distinta, instruído a construir o caso contra. Esse passo
-tem viés medido a favor de refutar — ele reprova mais do que deveria — então o resultado
-foi usado como gerador de profundidade, não como juiz. O item de §3.1 é o único que
-sobreviveu inteiro; o de §3.2 foi enfraquecido de "risco provável" para "risco de desenho",
-e o texto reflete isso.
+**Refutation and what it did.** Every convergent item and every unique view went through
+a refutation pass in a model from a distinct family, instructed to build the case
+against. That pass has a measured bias toward refuting — it fails more than it should —
+so its result was used as a depth generator, not as a judge. The §3.1 item is the only
+one that survived intact; the §3.2 item was weakened from "likely risk" to "design risk,"
+and the text reflects that.
 
-**Drill-down.** Cada citação deste dossiê foi verificada por código contra a resposta
-original do conselheiro a quem é atribuída, e o texto integral de cada célula fica gravado
-junto ao run — os itens acima podem ser abertos até a fonte. Nenhuma citação foi editada
-para caber no texto; onde havia corte, ele está marcado com reticências.
+**Drill-down.** Every quote in this dossier was verified by code against the original
+response of the advisor it is attributed to, and the full text of every cell is stored
+with the run — the items above can be opened down to the source. No quote was edited to
+fit the text; wherever there was a cut, it is marked with an ellipsis.

@@ -1,52 +1,53 @@
 #!/usr/bin/env python3
-"""Confere que os números do README batem com a realidade do repo.
+"""Checks that the README's numbers match the reality of the repo.
 
-Por que existe: a contagem de testes no README já esteve errada DUAS vezes (dizia 219, e
-depois 191, quando eram outros). Atualizar à mão não resolve — o número muda a cada suíte
-nova e ninguém lembra. E não é preciosismo: é a primeira afirmação verificável que alguém
-lê no repositório. Número errado ali é a assinatura de um projeto que não confere o que
-afirma, num motor cujo argumento inteiro é conferir o que se afirma.
+Why it exists: the test count in the README has been wrong TWICE already (it said 219,
+then 191, when the numbers were something else). Updating by hand does not fix it — the
+number changes with every new suite and nobody remembers. And it is not nitpicking: it is
+the first verifiable claim anyone reads in the repository. A wrong number there is the
+signature of a project that does not check what it claims, in an engine whose entire
+argument is checking what is claimed.
 
-Fica FORA da suíte de propósito: rodar as suítes de dentro de uma suíte recursa.
+It stays OUT of the suite on purpose: running the suites from inside a suite recurses.
 
-Uso:  python3 tools/check-readme-numbers.py      → exit 0 = bate; 1 = não bate.
+Usage:  python3 tools/check-readme-numbers.py      → exit 0 = matches; 1 = does not.
 """
 import re
 import subprocess
 import sys
 from pathlib import Path
 
-RAIZ = Path(__file__).resolve().parents[1]
-PADRAO = r"\*\*(\d+) tests across (\d+) suites — all (\d+) modules"
+ROOT = Path(__file__).resolve().parents[1]
+PATTERN = r"\*\*(\d+) tests across (\d+) suites — all (\d+) modules"
 
 
 def main() -> int:
-    readme = (RAIZ / "README.md").read_text(encoding="utf-8")
-    m = re.search(PADRAO, readme)
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    m = re.search(PATTERN, readme)
     if not m:
-        print("README: não achei a frase de cobertura "
+        print("README: could not find the coverage phrase "
               "('**N tests across M suites — all K modules').")
         return 1
 
-    suites = sorted((RAIZ / "tests").glob("test_*.py"))
-    testes = 0
+    suites = sorted((ROOT / "tests").glob("test_*.py"))
+    tests = 0
     for t in suites:
         r = subprocess.run([sys.executable, "-m", f"tests.{t.stem}"],
-                           cwd=RAIZ, capture_output=True, text=True)
-        mm = re.search(r"(\d+)/(\d+) testes ok", r.stdout)
+                           cwd=ROOT, capture_output=True, text=True)
+        mm = re.search(r"(\d+)/(\d+) tests ok", r.stdout)
         if not mm:
-            print(f"não consegui contar {t.stem} (a suíte imprimiu o total?)")
+            print(f"could not count {t.stem} (did the suite print its total?)")
             return 1
-        testes += int(mm.group(2))
-    modulos = [p for p in (RAIZ / "high_stakes").glob("*.py") if p.stem != "__init__"]
+        tests += int(mm.group(2))
+    modules = [p for p in (ROOT / "high_stakes").glob("*.py") if p.stem != "__init__"]
 
-    real = (testes, len(suites), len(modulos))
-    dito = tuple(int(x) for x in m.groups())
-    if dito != real:
-        print(f"README DESATUALIZADO: diz {dito[0]} testes / {dito[1]} suítes / "
-              f"{dito[2]} módulos; real é {real[0]} / {real[1]} / {real[2]}.")
+    actual = (tests, len(suites), len(modules))
+    stated = tuple(int(x) for x in m.groups())
+    if stated != actual:
+        print(f"README OUT OF DATE: it says {stated[0]} tests / {stated[1]} suites / "
+              f"{stated[2]} modules; reality is {actual[0]} / {actual[1]} / {actual[2]}.")
         return 1
-    print(f"README bate: {real[0]} testes · {real[1]} suítes · {real[2]} módulos.")
+    print(f"README matches: {actual[0]} tests · {actual[1]} suites · {actual[2]} modules.")
     return 0
 
 

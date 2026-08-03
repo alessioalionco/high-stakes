@@ -1,17 +1,18 @@
-"""Cliente HTTP mínimo sobre a stdlib — D8: zero dependência externa.
+"""Minimal HTTP client on top of the stdlib — D8: zero external dependencies.
 
-Reimplementa a fatia de `requests` que o motor usa (Session.get/post, Response com
-status_code/text/json/headers/iter_lines/close, RequestException) sobre `urllib.request`.
-A interface é deliberadamente idêntica à do `requests`: o ponto de injeção
-`ORClient(session=...)` continua valendo, e o corpo do retry não muda.
+Reimplements the slice of `requests` that the engine uses (Session.get/post, Response
+with status_code/text/json/headers/iter_lines/close, RequestException) on top of
+`urllib.request`. The interface is deliberately identical to `requests`': the
+`ORClient(session=...)` injection point keeps working, and the retry body does not change.
 
-Decisões conscientes:
-- **não-2xx volta como Response, não como exceção.** urllib levanta HTTPError; o retry
-  precisa LER status_code e Retry-After pra decidir. Sem isso, 429 viraria erro terminal.
-- **`Accept-Encoding: identity` explícito.** urllib não descomprime sozinho; sem o header,
-  um provider que resolvesse gzipar entregaria bytes ilegíveis ao parser de SSE.
-- **sem connection pooling.** Irrelevante em ~30 chamadas por run, e torna a Session
-  stateless — logo thread-safe por construção (o dispatch é paralelo).
+Deliberate decisions:
+- **non-2xx comes back as a Response, not as an exception.** urllib raises HTTPError; the
+  retry needs to READ status_code and Retry-After to decide. Without that, a 429 would
+  become a terminal error.
+- **explicit `Accept-Encoding: identity`.** urllib does not decompress on its own; without
+  the header, a provider that decided to gzip would hand unreadable bytes to the SSE parser.
+- **no connection pooling.** Irrelevant at ~30 calls per run, and it makes the Session
+  stateless — hence thread-safe by construction (dispatch is parallel).
 """
 from __future__ import annotations
 
@@ -23,34 +24,35 @@ import urllib.request
 
 __all__ = ["DeadlineExceeded", "RequestException", "Response", "Session"]
 
-# Tetos de leitura. Corpo remoto sem limite é DoS trivial: uma resposta sem newline
-# fazia `readline()` bufferizar o stream inteiro (medido: 27 MB -> 294 MB de RSS), e o
-# dispatch roda 6-8 dessas em paralelo.
+# Read ceilings. An unbounded remote body is trivial DoS: a response with no newline
+# made `readline()` buffer the entire stream (measured: 27 MB -> 294 MB of RSS), and
+# dispatch runs 6-8 of these in parallel.
 MAX_BODY_BYTES = 32 * 1024 * 1024
 MAX_LINE_BYTES = 4 * 1024 * 1024
 
 
 class RequestException(Exception):
-    """Falha de transporte: DNS, conexão recusada, timeout. Transiente -> retry."""
+    """Transport failure: DNS, connection refused, timeout. Transient -> retry."""
 
 
 class DeadlineExceeded(Exception):
-    """Prazo de PAREDE estourado. Deliberadamente NÃO herda de RequestException: o retry
-    trata transporte como transiente, e retentar um prazo estourado multiplicava a espera
-    pelo número de tentativas (4 × 1200s = 80 min) queimando gerações pagas."""
+    """WALL-CLOCK deadline blown. Deliberately does NOT inherit from RequestException:
+    the retry treats transport as transient, and retrying a blown deadline multiplied
+    the wait by the number of attempts (4 × 1200s = 80 min) burning paid generations."""
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    """Não segue redirect NENHUM.
+    """Follows NO redirect whatsoever.
 
-    O handler padrão do urllib reenvia TODOS os headers ao destino do 3xx, inclusive
-    `Authorization: Bearer <chave>` — e o destino pode ser outro host. O `requests`, que
-    este módulo substitui, remove auth cross-host em `Session.rebuild_auth`; reimplementar
-    sem essa trava vazava a chave de API para quem controlasse o redirect.
+    urllib's default handler re-sends ALL headers to the 3xx destination, including
+    `Authorization: Bearer <key>` — and the destination can be another host. `requests`,
+    which this module replaces, strips auth cross-host in `Session.rebuild_auth`;
+    reimplementing without that guard leaked the API key to whoever controlled the
+    redirect.
 
-    Os endpoints usados aqui não redirecionam legitimamente, então a resposta segura é não
-    seguir: devolver None faz o urllib levantar HTTPError, que vira uma Response 3xx — e o
-    retry a classifica como erro terminal, que é o que um 3xx inesperado é.
+    The endpoints used here do not legitimately redirect, so the safe answer is not to
+    follow: returning None makes urllib raise HTTPError, which becomes a 3xx Response —
+    and the retry classifies it as a terminal error, which is what an unexpected 3xx is.
     """
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -58,10 +60,10 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def _build_opener() -> urllib.request.OpenerDirector:
-    """Opener PRÓPRIO, não o global.
+    """Our OWN opener, not the global one.
 
-    `urllib.request.urlopen` usa um opener de processo que qualquer código pode trocar com
-    `install_opener()`. O caminho do dinheiro não pode depender disso.
+    `urllib.request.urlopen` uses a process-wide opener that any code can swap with
+    `install_opener()`. The money path cannot depend on that.
     """
     return urllib.request.build_opener(
         _NoRedirect(),
@@ -70,7 +72,7 @@ def _build_opener() -> urllib.request.OpenerDirector:
 
 
 class Response:
-    """Resposta preguiçosa: o corpo só é lido quando alguém pede (.text/.iter_lines)."""
+    """Lazy response: the body is only read when someone asks for it (.text/.iter_lines)."""
 
     def __init__(self, raw, status_code: int, headers, url: str, deadline: float | None = None):
         self._raw = raw
@@ -78,24 +80,25 @@ class Response:
         self.headers = headers
         self.url = url
         self._text: str | None = None
-        # Prazo de PAREDE. O timeout do socket é por-operação: um servidor que manda um
-        # keep-alive a cada 2s segura o worker para sempre sem nunca estourar o timeout.
+        # WALL-CLOCK deadline. The socket timeout is per-operation: a server that sends
+        # a keep-alive every 2s holds the worker forever without ever blowing the
+        # timeout.
         self._deadline = deadline
 
     def _check_deadline(self) -> None:
         if self._deadline is not None and time.monotonic() > self._deadline:
             self.close()
             raise DeadlineExceeded(
-                f"prazo de parede estourado lendo {self.url} — o socket seguia vivo, "
-                "mas a resposta não completou a tempo")
+                f"wall-clock deadline blown while reading {self.url} — the socket was "
+                "still alive, but the response did not complete in time")
 
     @property
     def text(self) -> str:
         if self._text is None:
-            self._check_deadline()  # o retry lê .text em todo 429/5xx/4xx
+            self._check_deadline()  # the retry reads .text on every 429/5xx/4xx
             try:
                 body = self._raw.read(MAX_BODY_BYTES)
-            except Exception:  # corpo já consumido/socket morto -> texto vazio, não crash
+            except Exception:  # body already consumed/dead socket -> empty text, not a crash
                 body = b""
             self._text = body.decode("utf-8", "replace")
         return self._text
@@ -106,13 +109,13 @@ class Response:
     def raise_for_status(self) -> None:
         if not 200 <= self.status_code < 300:
             raise RequestException(
-                f"HTTP {self.status_code} em {self.url}: {self.text[:300]}")
+                f"HTTP {self.status_code} at {self.url}: {self.text[:300]}")
 
     def iter_lines(self):
-        """Linhas do corpo sem o terminador — mesmo contrato do requests.iter_lines().
+        """Body lines without the terminator — same contract as requests.iter_lines().
 
-        Com teto por linha e prazo de parede: as duas formas de um upstream mal-comportado
-        segurar o processo para sempre depois do dinheiro já gasto.
+        With a per-line ceiling and a wall-clock deadline: the two ways a misbehaving
+        upstream can hold the process forever after the money has already been spent.
         """
         try:
             while True:
@@ -122,8 +125,8 @@ class Response:
                     break
                 if len(line) >= MAX_LINE_BYTES and not line.endswith(b"\n"):
                     raise RequestException(
-                        f"linha maior que {MAX_LINE_BYTES} bytes sem terminador em "
-                        f"{self.url} — corpo tratado como malformado")
+                        f"line longer than {MAX_LINE_BYTES} bytes with no terminator at "
+                        f"{self.url} — body treated as malformed")
                 yield line.rstrip(b"\r\n")
         finally:
             self.close()
@@ -136,8 +139,8 @@ class Response:
 
 
 class Session:
-    """Stateless por desenho (ver docstring do módulo). `stream=` é aceito e ignorado:
-    urllib já é streaming — o corpo só sai do socket quando lido."""
+    """Stateless by design (see the module docstring). `stream=` is accepted and
+    ignored: urllib is already streaming — the body only leaves the socket when read."""
 
     def get(self, url: str, headers: dict | None = None, timeout: float | None = None,
             **_ignored) -> Response:
@@ -152,7 +155,7 @@ class Session:
             h.setdefault("Content-Type", "application/json")
         return self._open("POST", url, headers=h, timeout=timeout, body=body)
 
-    _opener = None  # criado sob demanda; um por processo, nosso, não o global
+    _opener = None  # created on demand; one per process, ours, not the global one
 
     @classmethod
     def _get_opener(cls) -> urllib.request.OpenerDirector:
@@ -170,11 +173,12 @@ class Session:
         try:
             raw = cls._get_opener().open(req, timeout=timeout)
         except urllib.error.HTTPError as exc:
-            # não-2xx: o retry precisa do status e do Retry-After -> devolve Response.
-            # 3xx chega aqui porque _NoRedirect recusa seguir (ver docstring de lá).
+            # non-2xx: the retry needs the status and the Retry-After -> return a
+            # Response. 3xx lands here because _NoRedirect refuses to follow (see its
+            # docstring).
             return Response(exc, exc.code, exc.headers, url, deadline)
         except urllib.error.URLError as exc:
             raise RequestException(str(exc.reason)) from exc
-        except OSError as exc:  # socket.timeout e afins (URLError já filtrado acima)
+        except OSError as exc:  # socket.timeout and friends (URLError already filtered above)
             raise RequestException(str(exc)) from exc
         return Response(raw, raw.status, raw.headers, url, deadline)

@@ -1,116 +1,116 @@
-# Gates interativos v2 — fluxo novo (2 gates) + fluxo recorrente (core neutro)
+# Interactive gates v2 — new flow (2 gates) + recurring flow (neutral core)
 
-> Captura as decisões de **experiência do usuário** dos gates — como o fluxo é EXIBIDO, não a
-> metodologia (que vive em `core/methodology.md`). Harness-neutral: o adapter serve os prompts, o
-> core define o CONTRATO de cada gate. **Redesenho da v2** (redesenho
-> pós-2 usos reais): o fluxo de 5 gates da v1 colapsa em **2 gates pra problema novo** e **1 pra
-> problema recorrente**, sem perder os kill-switches (que viram automáticos, não perguntas).
+> Captures the **user experience** decisions of the gates — how the flow is DISPLAYED, not the
+> methodology (which lives in `core/methodology.md`). Harness-neutral: the adapter serves the
+> prompts, the core defines each gate's CONTRACT. **v2 redesign** (a redesign
+> after 2 real uses): the v1 5-gate flow collapses into **2 gates for a new problem** and **1 for a
+> recurring problem**, without losing the kill-switches (which become automatic, not questions).
 
-## Convenções globais (valem em todo gate)
-- **Toda escolha do usuário sai numerada** (`1 / 2 / 3`).
-- **Heading de 2 níveis só:** `## Modo High Stakes · <gate>` + `### seção`.
-- **Flags de reconciliação:** o que eu assumo aparece como AFIRMAÇÃO corrigível ("assumi X —
-  corrige só se não estiver 100%"), nunca como pergunta que trava o fluxo.
-- **Papéis automáticos ficam ESCONDIDOS** (generalista, anti-tese, refutador, contagem de células,
-  firewall) → apêndice do relatório ou sob demanda.
-- **Kill-switches nunca viram pergunta:** número não-aterrado → gap declarado no dossiê; egress →
-  queries abstraídas por default; gates de render → código. Isso roda sozinho.
+## Global conventions (hold in every gate)
+- **Every user choice comes out numbered** (`1 / 2 / 3`).
+- **2 heading levels only:** `## High Stakes Mode · <gate>` + `### section`.
+- **Reconciliation flags:** what I assume appears as a correctable ASSERTION ("I assumed X —
+  correct only if it is not 100%"), never as a question that blocks the flow.
+- **Automatic roles stay HIDDEN** (generalist, anti-thesis, refuter, cell count,
+  firewall) → report appendix or on demand.
+- **Kill-switches never become a question:** ungrounded number → gap declared in the dossier; egress →
+  queries abstracted by default; render gates → code. This runs on its own.
 
-## FLUXO NOVO (problema inédito) — 2 gates
+## NEW FLOW (unprecedented problem) — 2 gates
 
-### Gate A — perguntas + materiais + agenda de research
-Disparado pelo problema do usuário. UMA mensagem com três blocos:
-1. **Perguntas que movem o teto** (★, 3-6, pré-preenchidas com o que eu já souber — o usuário
-   corrige em vez de redigir; cada uma com 1 linha de "por que pergunto"). Archetype-aware.
-   **Crença-alvo só aparece quando o objeto é ARTEFATO DE PERSUASÃO** (deck, narrativa,
-   posicionamento — é a spec de comunicação do artefato, não expectativa de veredito; nos demais
-   arquétipos o campo não existe).
-2. **Pedidos de material** (docs, dados internos, contexto não-público). Regra de destino
-   explícita: material e respostas factuais VÃO pros conselheiros (pack de evidência idêntico);
-   crença-alvo e prior do orquestrador ficam com o Chairman (firewall).
-3. **Agenda de deep research proposta PELO MODERADOR** (backward: o que a estrutura da decisão
-   exige saber + benchmark do orquestrador), com a regra de novidade: **tema novo ou risco de
-   conhecimento externo relevante → research completa; tema repetido dentro da validade → cache.**
-   O usuário corta/adiciona itens da agenda.
+### Gate A — questions + materials + research agenda
+Fired by the user's problem. ONE message with three blocks:
+1. **Questions that move the ceiling** (★, 3-6, pre-filled with what I already know — the user
+   corrects instead of drafting; each with 1 line of "why I ask"). Archetype-aware.
+   **The target belief only appears when the object is a PERSUASION ARTIFACT** (deck, narrative,
+   positioning — it is the artifact's communication spec, not a verdict expectation; in the other
+   archetypes the field does not exist).
+2. **Material requests** (docs, internal data, non-public context). Explicit destination
+   rule: material and factual answers GO to the advisors (identical evidence pack);
+   the target belief and the orchestrator's prior stay with the Chairman (firewall).
+3. **Deep-research agenda proposed BY THE MODERATOR** (backward: what the structure of the
+   decision demands to know + the orchestrator's benchmark), with the novelty rule: **new topic or
+   relevant risk of outside knowledge → full research; repeated topic within validity → cache.**
+   The user cuts/adds agenda items.
 
-O usuário responde (passo 3 do desenho do decisor) e o fluxo segue direto pro Gate B.
+The user answers (step 3 of the decider's design) and the flow goes straight to Gate B.
 
-### Gate B — pré-disparo (board + modelos + custo → GO)
-UMA mensagem com o retrato completo, tudo corrigível, nada re-perguntado:
-- 🎯 **Brief afiado** (devolutiva do Gate A em tabela + flags de reconciliação).
-- 👥 **Board sugerido** (lentes numeradas com "o que encarna"; sizing 3→5→7 por complexidade;
-  standing escondidos). Pool curado quando existir; do zero quando não.
-- 📤 **Devolutiva default do arquétipo** (formas A–F + régua padrão — 1 bloco corrigível; vira
-  conversa SÓ se o arquétipo for inédito). Shape "regras do jogo" quando a régua precisa de
-  ratificação (cheio/arquétipo novo):
-  > *"As regras de avaliação de cada conselheiro serão: (a) a decisão em binário [sim/não]
-  > (b) a quantidade estimada [faixa] (c) a dimensão que mais pesa no caso [1-5]. Mais alguma
-  > regra a adicionar ou tirar?"*
-- 🤖 **Roster do PIN** (ver "Roster pinado" abaixo): 1 linha de confirmação, não uma pesquisa.
-- 💰 **Custo estimado** (fórmula em `core/execution.md`; passa do cap → parar e perguntar; abaixo
-  → informar) + política de egress (1 linha).
-- 📁 **Onde grava** (layout em `core/sections/run-persistence.md`).
-- Ações: `1 Rodar · 2 Ajustar (diga o quê) · 3 Ver charter completo`.
+### Gate B — pre-dispatch (board + models + cost → GO)
+ONE message with the complete picture, everything correctable, nothing re-asked:
+- 🎯 **Sharpened brief** (Gate A's readback in a table + reconciliation flags).
+- 👥 **Suggested board** (numbered lenses with "what it embodies"; sizing 3→5→7 by complexity;
+  standing roles hidden). Curated pool when one exists; from scratch when not.
+- 📤 **The archetype's default readback** (A–F forms + default scoring rubric — 1 correctable
+  block; becomes a conversation ONLY if the archetype is unprecedented). "Rules of the game"
+  shape when the scoring rubric needs ratification (full/new archetype):
+  > *"Each advisor's evaluation rules will be: (a) the decision in binary [yes/no]
+  > (b) the estimated amount [range] (c) the dimension that weighs most in this case [1-5]. Any
+  > rule to add or remove?"*
+- 🤖 **PIN roster** (see "Pinned roster" below): 1 confirmation line, not a research project.
+- 💰 **Estimated cost** (formula in `core/execution.md`; passes the cap → stop and ask; below
+  → inform) + egress policy (1 line).
+- 📁 **Where it writes** (layout in `core/sections/run-persistence.md`).
+- Actions: `1 Run · 2 Adjust (say what) · 3 See full charter`.
 
-Após o GO: research (se houver) + painel + refutação + síntese + render verificado por código — sem mais paradas;
-o dossiê chega pronto. **Board formado do zero e acatado → 1 linha pós-GO:** `1 Salvar como pool ·
-2 Só desta vez` (a biblioteca de lentes acumula; o adapter grava no formato-casa).
+After the GO: research (if any) + panel + refutation + synthesis + code-verified render — no more stops;
+the dossier arrives ready. **Board formed from scratch and accepted → 1 line after the GO:** `1 Save as
+pool · 2 This time only` (the library of lenses accumulates; the adapter writes it in the house format).
 
-## FLUXO RECORRENTE (problema já trabalhado) — 1 gate
-Disparado por "carrega o problema X". O motor recarrega o diretório da decisão (brief, board
-congelado, roster, dossiê, ledger — `core/sections/run-persistence.md`) e pergunta **o que fazer**,
-com menu adaptado ao estado:
-- `1` **Rodada nova / loop** (artefato v2 → mesmo júri congelado, research em cache, delta por dimensão)
-- `2` **Quick run** em material novo do mesmo tema (preset quick; mensagem única → `1 Rodar`)
-- `3` **Drill-down** no dossiê existente (por âncora §N.M)
-- `4` **Registrar outcome** no ledger (calibração real do motor)
-- `5` **Encerrar** a decisão
+## RECURRING FLOW (a problem already worked) — 1 gate
+Fired by "load problem X". The engine reloads the decision's directory (brief, frozen board,
+roster, dossier, ledger — `core/sections/run-persistence.md`) and asks **what to do**,
+with a menu adapted to the state:
+- `1` **New round / loop** (artifact v2 → same frozen jury, cached research, delta per dimension)
+- `2` **Quick run** on new material from the same topic (quick preset; single message → `1 Run`)
+- `3` **Drill-down** into the existing dossier (by §N.M anchor)
+- `4` **Record the outcome** in the ledger (real calibration of the engine)
+- `5` **Close** the decision
 
-## Presets — RÁPIDO × CHEIO (calibrados por medição de custo-benefício dos assentos)
+## Presets — QUICK × FULL (calibrated by measuring the seats' cost-benefit)
 
-| | **quick** (tema recorrente, reversível) | **cheio** (inédito e/ou irreversível) |
+| | **quick** (recurring, reversible topic) | **full** (unprecedented and/or irreversible) |
 |---|---|---|
-| Lentes | 3 do pool + generalista | 5-7 + generalista ×M + bull/bear no crux |
-| Júri | **M=3 do pin** (flagship + 2 baratos) | **M=4** (pin + 4ª família) |
-| Agenda | moderador (backward+benchmark) | + pre-pass dos conselheiros (forward) se domínio novo |
-| Research | por novidade/cache (TTL) | idem, com agenda completa |
-| Cenários | único (as-is) | A/B em célula + dud-screen quando há movimentos a pesar |
-| Devolutiva | default do arquétipo | contrato A–F ratificado no Gate B |
-| Gates | 1 (mensagem única → GO) | 2 (Gate A → Gate B) |
-| Sempre, nos dois | anti-tese ×1 · refutador de família externa · síntese cega à marca · gates de render por código · persistência do run |
+| Lenses | 3 from the pool + generalist | 5-7 + generalist ×M + bull/bear on the crux |
+| Jury | **M=3 from the pin** (flagship + 2 cheap) | **M=4** (pin + 4th family) |
+| Agenda | moderator (backward+benchmark) | + advisor pre-pass (forward) if the domain is new |
+| Research | by novelty/cache (TTL) | same, with the full agenda |
+| Scenarios | single (as-is) | in-cell A/B + dud-screen when there are moves to weigh |
+| Readback | archetype default | A–F contract ratified at Gate B |
+| Gates | 1 (single message → GO) | 2 (Gate A → Gate B) |
+| Always, in both | anti-thesis ×1 · external-family refuter · brand-blind synthesis · code render gates · run persistence |
 
-## Roster pinado [substitui o floor-check por-run da v1]
-O roster de modelos vive num **PIN da instância** (arquivo do adapter) com data, papéis e
-**validade (~30 dias)**. No Gate B ele aparece como 1 linha de confirmação. Re-pesquisa (o método
-do floor-check em `core/methodology.md` §3a-ter) roda só quando: o pin vence · sai release
-relevante · o domínio exige competência específica que o pin não cobre. **Invariante intacto: o
-roster CONGELA dentro de um loop** (delta v1→v2 exige os mesmos juízes). Os assentos do pin são
-decididos POR DADO (experimento de assentos; ver a instância) — não por gosto nem por índice só.
+## Pinned roster [replaces v1's per-run floor-check]
+The model roster lives in an **instance PIN** (an adapter file) with date, roles and
+**validity (~30 days)**. At Gate B it appears as 1 confirmation line. Re-research (the floor-check
+method in `core/methodology.md` §3a-ter) runs only when: the pin expires · a relevant release
+ships · the domain demands specific competence the pin does not cover. **Invariant intact: the
+roster FREEZES within a loop** (the v1→v2 delta demands the same judges). The pin's seats are
+decided BY DATA (the seats experiment; see the instance) — not by taste nor by index alone.
 
-## Gate de custo e de saída de dados — fica dentro do Gate B
-- **Custo:** a estimativa TOTAL (research + células + refutador) aparece no Gate B, antes de
-  qualquer chamada paga. Acima do cap ($15 default) → parar e perguntar; abaixo → informar e, com
-  o GO, seguir sem novas paradas.
-- **Egress:** default = query externa ABSTRAI (nunca número/trecho sensível); pra enviar trecho
-  sensível, mostrar exatamente o que sai e pedir OK. Fatos privados ficam internos (células
-  via API, nunca em busca externa).
-  ⚠️ **Este gate é a ÚNICA trava de egress que existe** — e ela é humana. Não há filtro de
-  conteúdo no código (a denylist que existia foi removida; ver o cabeçalho de
-  `high_stakes/evidence.py`), e **roteamento no-retention não existe**: o motor não consulta
-  a política de retenção de provedor nenhum. Se você mostrar e o humano der OK, sai.
+## Cost and data-egress gate — lives inside Gate B
+- **Cost:** the TOTAL estimate (research + cells + refuter) appears at Gate B, before any
+  paid call. Above the cap ($15 default) → stop and ask; below → inform and, with the
+  GO, continue with no further stops.
+- **Egress:** default = external queries ABSTRACT (never a number/sensitive excerpt); to send a
+  sensitive excerpt, show exactly what leaves and ask for OK. Private facts stay internal (cells
+  via API, never in external search).
+  ⚠️ **This gate is the ONLY egress guard that exists** — and it is human. There is no content
+  filter in the code (the denylist that existed was removed; see the header of
+  `high_stakes/evidence.py`), and **no-retention routing does not exist**: the engine does not
+  consult any provider's retention policy. If you show it and the human OKs it, it leaves.
 
-## Cascata de invalidação
-Com 2 gates, a cascata opera dentro do Gate B: uma edição re-deriva os blocos afetados e o gate é
-re-apresentado SÓ com o que mudou (nunca o retrato inteiro de novo):
+## Invalidation cascade
+With 2 gates, the cascade operates inside Gate B: an edit re-derives the affected blocks and the
+gate is re-presented ONLY with what changed (never the whole picture again):
 ```
-brief → board → agenda/evidência → devolutiva/régua → custo → GO
+brief → board → agenda/evidence → readback/scoring rubric → cost → GO
 ```
-- Mudou o brief → re-deriva board + agenda + devolutiva default.
-- Mudou o board → re-deriva agenda (e custo).
-- Mudou a agenda/evidência → re-checa devolutiva (dimensão nova) e custo.
-- Mudou a devolutiva/régua → só custo.
-Regra: declarar o que re-derivou; nunca deixar bloco stale no gate.
+- Brief changed → re-derive board + agenda + default readback.
+- Board changed → re-derive agenda (and cost).
+- Agenda/evidence changed → re-check readback (new dimension) and cost.
+- Readback/scoring rubric changed → cost only.
+Rule: declare what was re-derived; never leave a stale block in the gate.
 
-## Origem
-Desenho original de fluxo interativo, redesenhado após os primeiros usos reais e a medição
-dos assentos do júri. Os gates de custo e a cascata de invalidação foram preservados.
+## Origin
+Original interactive-flow design, redesigned after the first real uses and the measurement
+of the jury's seats. The cost gates and the invalidation cascade were preserved.

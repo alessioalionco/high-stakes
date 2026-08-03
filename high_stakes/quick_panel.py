@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""quick_panel.py — células do preset QUICK com caching de prefixo + roster do PIN.
+"""quick_panel.py — QUICK preset cells with prefix caching + roster from the PIN.
 
-Contrato (core/execution.md §caching + interactive-gates v2):
-- o MATERIAL compartilhado (artefato/evidência) entra como PREFIXO byte-idêntico do user em toda
-  célula (system genérico curto e idêntico) — persona/ask vão no SUFIXO. É a pré-condição do
-  cache de prefixo dos providers (persona no prefixo quebra o cache).
-- o júri vem do PIN da instância (roster-pin.yaml): M=3 no quick; M=4 no cheio (extra judge).
-Zero dependência nova: o pin é lido por um parser mínimo do formato da casa (chave: valor e
-listas de dicts inline `- {k: v, ...}`), sem pyyaml.
+Contract (core/execution.md §caching + interactive-gates v2):
+- the shared MATERIAL (artifact/evidence) enters as a byte-identical user PREFIX in every
+  cell (short, identical, generic system) — persona/ask go in the SUFFIX. This is the
+  precondition for the providers' prefix cache (a persona in the prefix breaks the cache).
+- the jury comes from the instance's PIN (roster-pin.yaml): M=3 in quick; M=4 in the full
+  run (extra judge).
+Zero new dependencies: the pin is read by a minimal parser for the house format (key: value
+and lists of inline dicts `- {k: v, ...}`), no pyyaml.
 """
 from __future__ import annotations
 
@@ -17,19 +18,19 @@ from pathlib import Path
 
 from . import config
 
-# Sem caminho fixo: o pin do usuário ($HIGH_STAKES_HOME) ganha do embarcado. O antigo
-# `parents[2]/.claude/skills/...` só resolvia dentro do repo de quem escreveu.
+# No hard-coded path: the user's pin ($HIGH_STAKES_HOME) wins over the bundled one. The old
+# `parents[2]/.claude/skills/...` only resolved inside the author's own repo.
 DEFAULT_PIN = None
 
-SYSTEM_QUICK = ("Você é um conselheiro num painel adversarial CEGO (ninguém lê ninguém). "
-                "Julgue o material com rigor, cite números dele, nunca invente dado.")
+SYSTEM_QUICK = ("You are an advisor on a BLIND adversarial panel (no one reads anyone else). "
+                "Judge the material rigorously, cite its numbers, never invent data.")
 
-MATERIAL_HEADER = "=== MATERIAL COMPARTILHADO (idêntico para todo o painel) ===\n"
-MATERIAL_FOOTER = "\n=== FIM DO MATERIAL ===\n\n"
+MATERIAL_HEADER = "=== SHARED MATERIAL (identical for the whole panel) ===\n"
+MATERIAL_FOOTER = "\n=== END OF MATERIAL ===\n\n"
 
 
 def _clean(v: str):
-    """Valor escalar: tira aspas; true/false viram bool (o resto fica string)."""
+    """Scalar value: strips quotes; true/false become bool (everything else stays a string)."""
     v = v.strip().strip("'\"")
     if v.lower() == "true":
         return True
@@ -39,7 +40,7 @@ def _clean(v: str):
 
 
 def _strip_comment(line: str) -> str:
-    """Remove comentário fora de aspas (um '#' dentro de valor citado é preservado)."""
+    """Removes a comment outside quotes (a '#' inside a quoted value is preserved)."""
     in_q = None
     for i, ch in enumerate(line):
         if in_q:
@@ -53,7 +54,7 @@ def _strip_comment(line: str) -> str:
 
 
 def _parse_inline_dict(s: str) -> dict:
-    """`{model: x, family: y, reasoning: off}` -> dict (escalares limpos)."""
+    """`{model: x, family: y, reasoning: off}` -> dict (cleaned scalars)."""
     out = {}
     for part in s.strip().strip("{}").split(","):
         if ":" in part:
@@ -63,7 +64,7 @@ def _parse_inline_dict(s: str) -> dict:
 
 
 def load_pin(path: Path | None = None) -> dict:
-    """Lê o roster-pin.yaml (formato da casa). Retorna dict com quick_judges (lista de dicts),
+    """Reads roster-pin.yaml (house format). Returns a dict with quick_judges (list of dicts),
     full_extra_judge, refuter, chairman, pinned (date), ttl_days (int)."""
     path = Path(path) if path else config.pin_path()
     pin: dict = {"quick_judges": []}
@@ -93,11 +94,11 @@ def load_pin(path: Path | None = None) -> dict:
 
 
 def pin_expired(pin: dict, today: date | None = None) -> bool:
-    """True se o pin venceu (gatilho de floor-check — methodology §3a-ter).
+    """True if the pin has expired (floor-check trigger — methodology §3a-ter).
 
-    Data ausente ou ilegível conta como VENCIDO, nunca como erro: derrubar o run por causa
-    de um typo no arquivo de config seria pior, e "vencido" é a direção segura — força
-    re-verificar o roster em vez de confiar nele em silêncio."""
+    A missing or unreadable date counts as EXPIRED, never as an error: taking the run down
+    because of a typo in a config file would be worse, and "expired" is the safe direction —
+    it forces re-verifying the roster instead of silently trusting it."""
     try:
         pinned = date.fromisoformat(str(pin.get("pinned", "")))
     except (ValueError, TypeError):
@@ -120,9 +121,9 @@ def build_quick_tasks(material: str, personas: dict[str, str], ask_builder, pars
                       pin: dict | None = None, full: bool = False,
                       max_tokens: int = 8000, timeout: int = 1200,
                       prompt_version: str = "quick-v1") -> list[dict]:
-    """Monta as células do quick: personas = {key: sufixo-da-persona-SEM-o-material};
-    ask_builder(key) -> texto do ask/schema daquele arquétipo. O material entra UMA vez,
-    como prefixo idêntico. `full=True` soma o extra judge do pin (M=4)."""
+    """Builds the quick cells: personas = {key: persona-suffix-WITHOUT-the-material};
+    ask_builder(key) -> the ask/schema text for that archetype. The material enters ONCE,
+    as an identical prefix. `full=True` adds the pin's extra judge (M=4)."""
     pin = pin or load_pin()
     judges = list(pin["quick_judges"])
     if full and pin.get("full_extra_judge"):
@@ -131,7 +132,7 @@ def build_quick_tasks(material: str, personas: dict[str, str], ask_builder, pars
     tasks = []
     for key, persona_suffix in personas.items():
         for j in judges:
-            mkey = j["model"].split("/")[-1]  # único por juiz (família repetida não colide)
+            mkey = j["model"].split("/")[-1]  # unique per judge (a repeated family does not collide)
             tasks.append({
                 "cell_id": f"cell_{key}_{mkey}",
                 "model": j["model"],
@@ -142,7 +143,8 @@ def build_quick_tasks(material: str, personas: dict[str, str], ask_builder, pars
                 "parse": parse,
                 "request": _request_for(j, max_tokens, timeout),
                 "meta": {"advisor": key, "model_key": mkey, "family": j.get("family", ""),
-                         "papel": "cobertura",
+                         # "role" is a provenance field shared with xverify.py.
+                         "role": "coverage",
                          "prompt_version": prompt_version},
             })
     return tasks

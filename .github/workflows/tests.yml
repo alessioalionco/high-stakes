@@ -1,0 +1,64 @@
+name: tests
+
+# Why it exists: the suite is the only witness to what this engine promises, and without
+# CI "all green" becomes a claim that only holds on the author's machine. It runs on
+# push, on PR, and weekly — the weekly run exists because the ZERO-dependency promise is
+# verified by AST against the stdlib of the installed version, and a new Python version
+# can break it without anyone touching the code.
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"   # Monday, 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read          # the workflow only reads the repo; nothing here writes or publishes
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false    # I want to see ALL the versions that break, not just the first
+      matrix:
+        python: ["3.11", "3.13"]   # 3.11 = the pyproject floor; 3.13 = what the user has
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: install nothing (the promise is pure stdlib)
+        # There is no `pip install` on purpose. If one ever shows up, the D8 promise
+        # (zero external dependencies) has been broken — and the step below should have
+        # failed FIRST. This comment is the alarm for whoever comes to add one.
+        run: python -c "import sys; print(sys.version)"
+
+      - name: executable suite (project convention — PASS/exit≠0, no framework)
+        env:
+          # the suite talks to no provider: test_or_client spins up a local
+          # http.server. A key leaking into CI is not used, but
+          # test_install_smoke checks that the product does not depend on it.
+          OPENROUTER_API_KEY: ""
+        run: |
+          failed=0
+          for t in tests/test_*.py; do
+            name="tests.$(basename "$t" .py)"
+            echo "::group::$name"
+            if python -m "$name"; then
+              echo "::endgroup::"
+            else
+              echo "::endgroup::"
+              echo "::error title=red suite::$name"
+              failed=1
+            fi
+          done
+          exit $failed
+
+      - name: the README's numbers match reality
+        # Lives outside the suite because running the suites from inside a suite
+        # recurses. It has been wrong twice; it is the repo's first verifiable claim.
+        run: python tools/check-readme-numbers.py

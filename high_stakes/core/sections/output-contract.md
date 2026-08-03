@@ -1,189 +1,190 @@
-# Contrato de output — taxonomia A–F + render §0–§7 (core neutro)
+# Output contract — A–F taxonomy + §0–§7 render (neutral core)
 
-> Tipa o que o board ENTREGA (6 formas A–F, escolhidas na devolutiva do Gate B — fluxo v2) e como isso vira o RENDER
-> personificado (esqueleto fixo §0–§7). Harness-neutral: o core fixa o CONTRATO; o adapter gera o HTML
-> físico. O resumo que
-> alimenta este render obedece o contrato lossless de `core/methodology.md` §3f.
+> Types what the board DELIVERS (6 forms A–F, chosen in the Gate B readback — v2 flow) and how that becomes
+> the personified RENDER (fixed skeleton §0–§7). Harness-neutral: the core fixes the CONTRACT; the adapter
+> generates the physical HTML. The summary that
+> feeds this render obeys the lossless contract of `core/methodology.md` §3f.
 
-## Camada 0 — a unidade atômica é o ITEM (card)
-A unidade de output é o **item/card** (cada fraqueza, pergunta, premissa, força — com suas tags). Os
-headlines são **views agregadas por cima dos cards**, não uma unidade separada. O card individual é o
-que o humano valida no gate ("objeção real ou artefato de LLM?") e o que o loop subtrai.
+## Layer 0 — the atomic unit is the ITEM (card)
+The unit of output is the **item/card** (each weakness, question, premise, strength — with its tags). The
+headlines are **aggregated views on top of the cards**, not a separate unit. The individual card is what
+the human validates at the gate ("real objection or LLM artifact?") and what the loop subtracts.
 
-**Espinha (Decision Quality — Stanford/SDG):** todo item ameaça 1 dos 6 elos → transforma "tem buracos"
-em "ONDE a decisão está frágil": 1 Frame (assento da anti-tese) · 2 Alternativas · 3 Informação (missing
-evidence + investigar) · 4 Valores/trade-offs · 5 Raciocínio · 6 Comprometimento. *Uma decisão é tão
-forte quanto o elo mais fraco da corrente.*
+**Spine (Decision Quality — Stanford/SDG):** every item threatens 1 of the 6 links → it turns "there are
+holes" into "WHERE the decision is fragile": 1 Frame (the anti-thesis seat) · 2 Alternatives · 3 Information
+(missing evidence + investigate) · 4 Values/trade-offs · 5 Reasoning · 6 Commitment. *A decision is only as
+strong as the weakest link in the chain.*
 
-**Tipo do item (pela AÇÃO):** flaw→corrigir · objection→preempt · assumption→testar ·
-open_question/unknown→**investigar** · missing_evidence→aterrar · risk→mitigar · dud→cortar ·
-**strength**→liderar/proteger · keep→não-over-investir · **indiferente/ruído**→cortar (o emagrecedor).
+**Item type (by ACTION):** flaw→fix · objection→preempt · assumption→test ·
+open_question/unknown→**investigate** · missing_evidence→ground · risk→mitigate · dud→cut ·
+**strength**→lead/protect · keep→don't-over-invest · **indifferent/noise**→cut (the slimmer).
 
-**⚠️ Trava epistêmica:** o board é MENOS confiável pra CONFIRMAR o que está certo do que pra achar o que
-está errado (confirmar = a direção que agrada o proxy/Goodhart). Logo o **positivo sai rotulado como
-MENOR-confiança** — hipótese sobre o que funciona, registro de feedback, nunca veredito validado igual
-às fraquezas.
+**⚠️ Epistemic lock:** the board is LESS reliable at CONFIRMING what is right than at finding what is
+wrong (confirming = the direction that pleases the proxy/Goodhart). Hence the **positive ships labeled as
+LOWER-confidence** — a hypothesis about what works, a record of feedback, never a validated verdict on par
+with the weaknesses.
 
-**Atributos (5 tags por card):** decision_impact (deal-breaker/material/cosmético) · groundedness
-(ancorado-em-evidência vs palpite · checável-vs-subjetivo) · consenso_vs_contestado (nº de lentes +
-spread) · actionability + custo · proveniência + viés do assento.
+**Attributes (5 tags per card):** decision_impact (deal-breaker/material/cosmetic) · groundedness
+(evidence-anchored vs hunch · checkable-vs-subjective) · consensus_vs_contested (number of lenses +
+spread) · actionability + cost · provenance + seat bias.
 
-## Camada 1 — a taxonomia de 6 formas de output (A–F)
-Todo caso é um combo. A devolutiva do Gate B (`core/sections/interactive-gates.md`; default do
-arquétipo no quick, ratificada no cheio) escolhe as formas; elas tipam o CONTEÚDO dos slots do render.
+## Layer 1 — the taxonomy of 6 output forms (A–F)
+Every case is a combo. The Gate B readback (`core/sections/interactive-gates.md`; archetype default in the
+quick flow, ratified in the full one) chooses the forms; they type the CONTENT of the render slots.
 
-| Forma | O que é |
+| Form | What it is |
 |---|---|
-| **A** Vereditos | binário/categórico ("daria o term sheet?") |
-| **B** Quantidades | **sempre faixa, nunca ponto** (valuation range) |
-| **C** Lista de mudanças ranqueada | as N sugestões acionáveis, rankeadas |
-| **D** Protocolos/forks | mutuamente exclusivos + pré-condição |
-| **E** Red-flags / needs-human | deal-breakers + limites da autoridade do board |
-| **F** Perguntas a levar | quando o board não é a autoridade final |
+| **A** Verdicts | binary/categorical ("would you hand over the term sheet?") |
+| **B** Quantities | **always a range, never a point** (valuation range) |
+| **C** Ranked change list | the N actionable suggestions, ranked |
+| **D** Protocols/forks | mutually exclusive + precondition |
+| **E** Red flags / needs-human | deal-breakers + limits of the board's authority |
+| **F** Questions to carry | when the board is not the final authority |
 
-## Camada 2 — o esqueleto FIXO do render (§0–§7)
-Estrutura fixa, **numeração hierárquica §N.M em TODO item** (âncoras + cross-refs — drill-down
-conversacional: "no 2.3, fiquei com dúvida X"):
+## Layer 2 — the FIXED render skeleton (§0–§7)
+Fixed structure, **hierarchical §N.M numbering on EVERY item** (anchors + cross-refs — conversational
+drill-down: "on 2.3, I'm left with doubt X"):
 
-- **§0 Resumo executivo** — 5+ parágrafos densos, fatos em bold, antecipa a recomendação + como-ler (com a ressalva de que erros se correlacionam entre modelos parecidos).
-- **§Escopo (E1-E4):** E1 dimensões de avaliação + RESULTADO por dimensão · E2 insumos fornecidos · E3 o que os conselheiros PEDIRAM e faltava (→ alimenta a agenda) · E4 método em 1 linha.
-- **§1 Convergentes:** matriz de checkmarks (peso = conselheiros DISTINTOS, não células) + até 3 quotes/item + mecanismo-do-dano em prosa + ressalva de correlação de erros.
-- **§2 Forks:** por fork — contexto + ensaio 🐂 + ensaio 🐻 (até 3 quotes cada) + por-que-divergem + custo-de-errar-por-lado + o-que-resolve (linka à agenda) + pré-condições.
-- **§3 Únicas por conselheiro:** item + tags + até 3 quotes + por-que-importa + testabilidade. *(Balde de maior valor esperado — os itens decision-changing vieram daqui.)*
-- **§4 Conselho:** por conselheiro — 1 parágrafo de tese (50% maior) + até 5 perguntas + até 5 sugestões + score strip nas dimensões (E1). Quotes verbatim. Spread = sinal, nível = peso fraco.
-- **§5 Agenda de investigação:** tabela-resumo + cada item aberto (o que é / por que precede / qual teste resolve / o que destrava).
-- **§6 Síntese do Chairman (NO FINAL):** 6.1 convergências · 6.2 divergências sequenciáveis · 6.3 veredito coletivo (dimensões do caso) · 6.4 as sugestões DETALHADAS (mecanismo+como+dono/gate, agrupadas Higiene/Prova/Narrativa/Processo) · 6.5 as perguntas do Chairman (com porquê) · **6.6 guardrails/triggers** (casa canônica da forma E agregada).
-- **§7 Apêndice:** descartados-e-porquê · honestidade-de-método · drill-down aos cards crus.
+- **§0 Executive summary** — 5+ dense paragraphs, facts in bold, anticipates the recommendation + how-to-read (with the caveat that errors correlate across similar models).
+- **§Scope (E1-E4):** E1 evaluation dimensions + RESULT per dimension · E2 inputs provided · E3 what the advisors ASKED FOR and was missing (→ feeds the agenda) · E4 method in 1 line.
+- **§1 Convergent points:** checkmark matrix (weight = DISTINCT advisors, not cells) + up to 3 quotes/item + damage-mechanism in prose + error-correlation caveat.
+- **§2 Forks:** per fork — context + 🐂 essay + 🐻 essay (up to 3 quotes each) + why-they-diverge + cost-of-being-wrong-per-side + what-resolves (links to the agenda) + preconditions.
+- **§3 Unique views per advisor:** item + tags + up to 3 quotes + why-it-matters + testability. *(Highest expected-value bucket — the decision-changing items came from here.)*
+- **§4 The board:** per advisor — 1 thesis paragraph (50% larger) + up to 5 questions + up to 5 suggestions + score strip on the dimensions (E1). Verbatim quotes. Spread = signal, level = weak weight.
+- **§5 Investigation agenda:** summary table + each open item (what it is / why it comes first / which test resolves it / what it unlocks).
+- **§6 Chairman synthesis (AT THE END):** 6.1 convergences · 6.2 sequenceable divergences · 6.3 collective verdict (case dimensions) · 6.4 the DETAILED suggestions (mechanism+how+owner/gate, grouped Hygiene/Proof/Narrative/Process) · 6.5 the Chairman's questions (with the why) · **6.6 guardrails/triggers** (canonical home of aggregated form E).
+- **§7 Appendix:** discarded-and-why · method-honesty · drill-down to the raw cards.
 
-**Físico** (responsabilidade do adapter): single-file HTML, medida de doc (~880px), dark mode, nav
-sticky, @media print (⌘P → PDF), groundedness renderizada (**borda sólida = verificado, tracejada =
-claim/suprimido**), zero dependência externa.
+**Physical** (the adapter's responsibility): single-file HTML, document measure (~880px), dark mode, sticky
+nav, @media print (⌘P → PDF), groundedness rendered (**solid border = verified, dashed =
+claim/suppressed**), zero external dependency.
 
-## Camada 3 — o mapa A–F → § (a costura)
-O esqueleto §0–§7 **nunca muda**; o contrato A–F tipa o CONTEÚDO dos slots. O backward generator da devolutiva
-gera a montante (assentos, régua, agenda); no render ele só parametriza.
+## Layer 3 — the A–F → § map (the stitching)
+The §0–§7 skeleton **never changes**; the A–F contract types the CONTENT of the slots. The readback's
+backward generator generates upstream (seats, yardstick, agenda); at render it only parameterizes.
 
-- **A/B → E1 + Tier 0 + §6.3 + score strip §4.** As dimensões E1 SÃO o contrato A/B tipado. Dimensão tipo-B rende **FAIXA em todo slot, nunca ponto**; faixa coletiva do §6.3 = envelope das faixas dos conselheiros, spread = sinal.
-- **C → §6.4** (matéria-prima: sugestões do §4; kill-list/cortar-repensar como views). A numeração 1-N é RANK do Chairman (impacto×custo); Higiene/Prova/Narrativa/Processo = tags secundárias. O "15" do sample é calibre do caso, não invariante.
-- **D → §2 + Tier 0 + §6.2.** §2 admite DOIS tipos:
-  - **fork contestado** (board diverge): aparato completo 🐂/🐻 + por-que-divergem + custo-por-lado.
-  - **fork condicional** (board CONVERGE no branch; a pré-condição está no MUNDO, não no board): rende pré-condição + branches + trigger, **sem 🐂/🐻**, peso citado como convergente. **Fabricar bear onde não houve divergência é rigor theater.**
-- **E → tags `deal-breaker`/`flaw` (§1–§3) + tabela de guardrails/triggers §6.6 + 🚩 na agenda.** Casa agregada canônica = §6.6.
-- **F → roteada por destinatário:** §4 (o que a lente aprofundaria) · E3→§5 (unknowns→teste) · §6.5 (decisor, incl. pré-registro).
-- **Marcador `needs-human`:** item §5 ou pergunta §6.5 cuja resolução exige **autoridade humana externa** (médico, advogado, o investidor real) leva o marcador — o board declara o limite da própria autoridade. Cobre a metade needs-human de E e a condição definidora de F.
+- **A/B → E1 + Tier 0 + §6.3 + §4 score strip.** The E1 dimensions ARE the typed A/B contract. A type-B dimension yields a **RANGE in every slot, never a point**; the collective range of §6.3 = envelope of the advisors' ranges, spread = signal.
+- **C → §6.4** (raw material: §4 suggestions; kill-list/cut-rethink as views). The 1-N numbering is the Chairman's RANK (impact×cost); Hygiene/Proof/Narrative/Process = secondary tags. The sample's "15" is the case's caliber, not an invariant.
+- **D → §2 + Tier 0 + §6.2.** §2 admits TWO types:
+  - **contested fork** (board diverges): full 🐂/🐻 apparatus + why-they-diverge + cost-per-side.
+  - **conditional fork** (board CONVERGES on the branch; the precondition lives in the WORLD, not in the board): yields precondition + branches + trigger, **without 🐂/🐻**, weight cited as convergent. **Fabricating a bear where there was no divergence is rigor theater.**
+- **E → `deal-breaker`/`flaw` tags (§1–§3) + §6.6 guardrails/triggers table + 🚩 on the agenda.** Canonical aggregated home = §6.6.
+- **F → routed by addressee:** §4 (what the lens would dig into) · E3→§5 (unknowns→test) · §6.5 (decision-maker, incl. pre-registration).
+- **`needs-human` marker:** a §5 item or §6.5 question whose resolution requires **external human authority** (a doctor, a lawyer, the real investor) carries the marker — the board declares the limit of its own authority. Covers the needs-human half of E and the defining condition of F.
 
-**Invariante:** forma ausente do contrato → o slot **colapsa com nota de 1 linha** ("contrato sem C —
-sem lista ranqueada"), **nunca some em silêncio** nem é preenchido por inércia.
+**Invariant:** a form absent from the contract → the slot **collapses with a 1-line note** ("contract
+without C — no ranked list"), it **never disappears silently** nor gets filled by inertia.
 
-## Personificação (regras de render)
-1. **Identidade = persona; modelo = parêntese.** "The Unit Economist (via Opus 4.8)". Conselheiro é a lente; modelo é qual cérebro rodou. *(A atribuição só aparece no RENDER — na visão-de-julgamento o card é ID opaco, `core/methodology.md` §3e.)*
-2. **Peso conta CONSELHEIROS distintos, não células.** 4 modelos da mesma persona = 1 lente, não 4 votos.
-3. **Quote do conselheiro = trecho verbatim do card cru** (drill-down mantido). No merge, vence a quote mais ESPECÍFICA.
-4. **Epígrafe em voz própria** (quote aforística verbatim, NUNCA gerada na síntese) + **fecho-veredito** em bold por bloco de conselheiro.
-5. **Antítese RENDERIZADA, não rodada:** o fork já É a antítese; justapor as quotes reais das células independentes (🐂/🐻). Debate real entre células segue proibido: célula que lê célula converge, e convergência induzida não é sinal.
-6. **Notas COM spread como sinal + rótulo "peso fraco":** o spread entre conselheiros é sinal real (fork detectado); o nível absoluto é caricatura — personas diferentes pontuam quase idêntico — e vai rotulado como tal.
-7. **Rodapé honesto:** "conselheiros são personas sintéticas — a assinatura é da lente, não do humano real que a nomeia."
+## Personification (render rules)
+1. **Identity = persona; model = parenthesis.** "The Unit Economist (via Opus 4.8)". The advisor is the lens; the model is which brain ran it. *(The attribution only appears at RENDER — in the judgment view the card is an opaque ID, `core/methodology.md` §3e.)*
+2. **Weight counts DISTINCT advisors, not cells.** 4 models of the same persona = 1 lens, not 4 votes.
+3. **An advisor's quote = verbatim excerpt from the raw card** (drill-down preserved). On merge, the most SPECIFIC quote wins.
+4. **Epigraph in the lens's own voice** (verbatim aphoristic quote, NEVER generated at synthesis) + **verdict close** in bold per advisor block.
+5. **Anti-thesis RENDERED, not run:** the fork already IS the antithesis; juxtapose the real quotes from the independent cells (🐂/🐻). Actual debate between cells remains forbidden: a cell that reads a cell converges, and induced convergence is not signal.
+6. **Scores WITH spread as signal + "weak weight" label:** the spread between advisors is real signal (fork detected); the absolute level is caricature — different personas score nearly identically — and is labeled as such.
+7. **Honest footer:** "advisors are synthetic personas — the signature belongs to the lens, not to the real human who names it."
 
-## Profundidade (o digest EXPANDE dos cards, não resume)
-O output custa mais que deep research e deve ser MAIS fundo: cada convergente = 2-3 parágrafos
-(mecanismo do dano, nuance, fix e o que ele não resolve); cada fork = contexto + ensaio bull + ensaio
-bear + por-que-divergem + custo-de-errar-por-lado + o-que-resolve; cada única = análise + testabilidade;
-cada conselheiro = parecer na voz da lente. TODA afirmação carrega número/fonte/confiança. O Chairman
-SINTETIZA as células da lente (não inventa); quotes sempre verbatim.
+## Depth (the digest EXPANDS from the cards, it does not summarize)
+The output costs more than deep research and must go DEEPER: each convergent point = 2-3 paragraphs
+(damage mechanism, nuance, the fix and what it does not solve); each fork = context + bull essay + bear
+essay + why-they-diverge + cost-of-being-wrong-per-side + what-resolves; each unique view = analysis +
+testability; each advisor = an opinion in the lens's voice. EVERY claim carries number/source/confidence.
+The Chairman SYNTHESIZES the lens's cells (does not invent); quotes always verbatim.
 
-## Gate de render — roda ANTES de entregar o dossiê (não pular)
+## Render gate — runs BEFORE delivering the dossier (do not skip)
 
-> **Este gate existe por causa de um modo de falha concreto.** Um dossiê foi
-> escrito a partir das contagens agregadas em vez dos cards, saiu raso, e vazou jargão de
-> engenharia no texto entregue ao decisor. O contrato em prosa já proibia as duas coisas e não
-> segurou — por isso aqui há barra mecânica, não só instrução. O princípio aplicado ao próprio
-> motor: **verificar significa evidência, não confiança.**
+> **This gate exists because of a concrete failure mode.** A dossier was
+> written from the aggregated tallies instead of the cards, came out shallow, and leaked engineering
+> jargon into the text delivered to the decision-maker. The prose contract already forbade both things
+> and did not hold — which is why there is a mechanical bar here, not just instruction. The principle
+> applied to the engine itself: **verifying means evidence, not confidence.**
 
-**R1 — Releitura obrigatória no momento do render.** Antes de escrever a primeira linha do
-dossiê, reler esta seção inteira e ABRIR um dossiê de referência (a barra física; o caminho
-concreto vem do adapter). Ter lido o contrato lá atrás, nos gates, NÃO conta — horas e um contexto
-inteiro separam os dois momentos, e é no render que a barra precisa estar na frente dos olhos.
+**R1 — Mandatory re-read at render time.** Before writing the first line of the
+dossier, re-read this entire section and OPEN a reference dossier (the physical bar; the concrete
+path comes from the adapter). Having read the contract way back, at the gates, does NOT count — hours
+and an entire context separate the two moments, and it is at render that the bar needs to be in front
+of your eyes.
 
-**R2 — Fonte obrigatória = cards crus.** O dossiê se escreve DOS CARDS (drill-down aberto por
-item), nunca só dos agregados/tallies. Tallies dão o esqueleto (pesos, flips, medianas); a carne
-(mecanismo, nuance, quote) vem do texto integral das células. Se uma seção foi escrita sem abrir
-os cards correspondentes, ela está errada por construção — mesmo que pareça boa.
+**R2 — Mandatory source = raw cards.** The dossier is written FROM THE CARDS (drill-down open per
+item), never from the aggregates/tallies alone. Tallies give the skeleton (weights, flips, medians); the
+flesh (mechanism, nuance, quote) comes from the full text of the cells. If a section was written without
+opening the corresponding cards, it is wrong by construction — even if it looks good.
 
-**R3 — Idioma do decisor.** O dossiê é para quem DECIDE, não para quem construiu o motor.
-Códigos internos — de experimento, de mecanismo, de item de evidência, de decisão — são
-**proibidos no corpo**. Ou a ideia é dita em português claro, ou o termo entra glosado na primeira
-ocorrência. Os avisos de método continuam obrigatórios (que erros se correlacionam, que notas são
-caricatura), mas ditos em linguagem de gente. O verificador mecânico reprova por FAMÍLIA de código,
-não por lista de instâncias: uma lista de instâncias apodrece assim que alguém inventa o código
-seguinte.
+**R3 — The decision-maker's language.** The dossier is for the one who DECIDES, not for the one who
+built the engine. Internal codes — for experiments, mechanisms, evidence items, decisions — are
+**forbidden in the body**. Either the idea is said in plain English, or the term enters glossed at its
+first occurrence. The method warnings remain mandatory (that errors correlate, that scores are
+caricature), but said in human language. The mechanical verifier fails by code FAMILY,
+not by a list of instances: a list of instances rots as soon as someone invents the next
+code.
 
-**R4 — Checklist mensurável (pisos = os definidos no formato de referência; o sample define o teto —
-o gate nunca aperta a barra definida por conta própria):**
-- §0: ≥5 parágrafos densos de PROSA (lista não conta), fatos em bold, antecipa a recomendação +
-  como-ler.
-- §1: cada convergente ≥2 parágrafos de prosa + **≥1 quote verbatim atribuída** (definido:
-  "1-2 quotes de referência"; a mais ESPECÍFICA vence — nunca encher pra pontuar) + resultado da
-  refutação quando houver; matriz de peso por conselheiro presente.
-- §2: cada fork CONTESTADO com os DOIS ensaios (🐂 e 🐻) + ≥1 quote por lado + por-que-divergem +
-  custo-de-errar-por-lado + o-que-resolve. Fork CONDICIONAL: sem 🐂/🐻, com pré-condição+trigger,
-  **marcado explicitamente com a frase "fork condicional"** no heading ou no bloco de contexto
-  (é o marcador que o verificador lê; palavra solta não isenta).
-- §3: cada única com análise + por-que-importa + testabilidade.
-- §4: cada conselheiro com epígrafe verbatim + parecer ≥1 parágrafo NA VOZ + perguntas e
-  sugestões presentes (até 5 cada — teto, não piso; nunca fabricar pra completar) +
-  score strip + fecho-veredito em bold.
-- §6.4: cada sugestão ≥400 chars com mecanismo+como+dono/gate (calibre de referência ~550c).
-  §6.5 e §6.6 presentes como headings próprios.
-- §7: descartados-e-porquê + honestidade-de-método + drill-down.
+**R4 — Measurable checklist (floors = the ones defined in the reference format; the sample defines the
+ceiling — the gate never tightens the defined bar on its own):**
+- §0: ≥5 dense paragraphs of PROSE (lists don't count), facts in bold, anticipates the recommendation +
+  how-to-read.
+- §1: each convergent point ≥2 paragraphs of prose + **≥1 attributed verbatim quote** (defined:
+  "1-2 reference quotes"; the most SPECIFIC one wins — never pad to score) + the refutation
+  result when there is one; per-advisor weight matrix present.
+- §2: each CONTESTED fork with BOTH essays (🐂 and 🐻) + ≥1 quote per side + why-they-diverge +
+  cost-of-being-wrong-per-side + what-resolves. CONDITIONAL fork: no 🐂/🐻, with precondition+trigger,
+  **explicitly marked with the phrase "conditional fork"** in the heading or in the context block
+  (that is the marker the verifier reads; a loose word does not exempt).
+- §3: each unique view with analysis + why-it-matters + testability.
+- §4: each advisor with a verbatim epigraph + an opinion of ≥1 paragraph IN THE VOICE + questions and
+  suggestions present (up to 5 each — a ceiling, not a floor; never fabricate to fill) +
+  score strip + verdict close in bold.
+- §6.4: each suggestion ≥400 chars with mechanism+how+owner/gate (reference caliber ~550c).
+  §6.5 and §6.6 present as their own headings.
+- §7: discarded-and-why + method-honesty + drill-down.
 
-**R5 — Validação mecânica obrigatória.** Rodar o **verificador estrutural apontado pelo adapter**
-e obter **exit 0** antes de entregar. Gate vermelho =
-corrigir e re-rodar; entregar com gate vermelho é violação de contrato, não julgamento editorial.
-O verificador é o piso (estrutura + jargão por família de código); R1-R4 seguem valendo no que
-código não mede (voz, nuance, altitude) — a fidelidade das quotes É medida por código, no R6.
+**R5 — Mandatory mechanical validation.** Run the **structural verifier pointed to by the adapter**
+and get **exit 0** before delivering. Red gate =
+fix and re-run; delivering with a red gate is a contract violation, not editorial judgment.
+The verifier is the floor (structure + jargon by code family); R1-R4 keep applying to what
+code does not measure (voice, nuance, altitude) — quote fidelity IS measured by code, in R6.
 
-**R8 — O marcador viaja COM a atribuição.** Toda quote atribuída carrega, **na própria
-linha**, o marcador `(lente simulada · <modelo>)`:
+**R8 — The marker travels WITH the attribution.** Every attributed quote carries, **on the very
+same line**, the marker `(simulated lens · <model>)`:
 
 ```
-> "texto da quote." — **The Unit Economist** (lente simulada · GPT-5.6 Sol)
+> "quote text." — **The Unit Economist** (simulated lens · GPT-5.6 Sol)
 ```
 
-> A regra R7 protege o DOCUMENTO; ela não protege o FRAGMENTO. Uma quote recortada para um
-> slide, um print ou uma mensagem sai sem o §Escopo — e o que sobra é uma frase com
-> tipografia de citação, atribuída a alguém que existe de verdade. As políticas de uso dos
-> provedores de modelo descrevem esse caso quase literalmente: atribuir conteúdo de modo a
-> **enganar sobre a origem**. Onde há divulgação explícita, elas não se aplicam; a
-> divulgação precisa estar onde o leitor está.
+> Rule R7 protects the DOCUMENT; it does not protect the FRAGMENT. A quote cropped for a
+> slide, a screenshot or a message leaves without the §Scope — and what remains is a sentence with
+> quotation typography, attributed to someone who actually exists. The model providers' usage
+> policies describe this case almost literally: attributing content in a way that
+> **misleads about its origin**. Where there is explicit disclosure, they do not apply; the
+> disclosure needs to be where the reader is.
 >
-> O antigo `(via <modelo>)` continua sendo aceito pelo verificador de quotes, para não
-> quebrar dossiês já gravados — mas não satisfaz esta regra: "via" identifica o modelo, não
-> avisa que a pessoa é simulada.
+> The old `(via <model>)` is still accepted by the quote verifier, so as not to
+> break already-recorded dossiers — but it does not satisfy this rule: "via" identifies the model, it
+> does not warn that the person is simulated.
 
-**R7 — Declarar que as personas são simuladas.** O §Escopo carrega, obrigatoriamente, uma
-frase dizendo que os conselheiros são **lentes simuladas por modelos de linguagem, que NÃO
-SÃO AS PESSOAS REAIS**, e que nenhuma frase atribuída a elas foi dita por elas.
+**R7 — Declare that the personas are simulated.** The §Scope mandatorily carries a
+sentence saying that the advisors are **lenses simulated by language models, that they ARE
+NOT THE REAL PEOPLE**, and that no sentence attributed to them was said by them.
 
-> Não é formalidade jurídica: é consequência do próprio formato. As lentes levam nomes de
-> pessoas de verdade, a atribuição `— **Nome**` usa a tipografia de citação real, e o
-> dossiê **circula** — vai para reuniões, para pessoas que não sabem o que é este motor. A
-> regra R6 garante que a quote é verbatim da CÉLULA; ela não garante nada sobre a pessoa.
-> Sem a declaração, entrega-se uma garantia forte sobre a coisa errada.
+> This is not legal formality: it is a consequence of the format itself. The lenses carry the names of
+> real people, the `— **Name**` attribution uses real citation typography, and the
+> dossier **circulates** — it goes to meetings, to people who do not know what this engine is.
+> Rule R6 guarantees the quote is verbatim from the CELL; it guarantees nothing about the person.
+> Without the declaration, you deliver a strong guarantee about the wrong thing.
 >
-> O `(via <modelo>)` na atribuição não substitui isto: lê como metadado de engenharia, não
-> como aviso. O verificador mecânico reprova o dossiê sem a frase.
+> The `(via <model>)` in the attribution does not substitute for this: it reads as engineering
+> metadata, not as a warning. The mechanical verifier fails the dossier without the sentence.
 
-**R6 — Quotes verificadas por código.** Quando as células cruas existem (sempre, num run real),
-TODA quote atribuída e toda epígrafe passa pelo verificador de quotes: verbatim contra o card do
-conselheiro a quem foi atribuída, exit 0 obrigatório. Quote não-verificada não chega a quem decide
-— corrige para o verbatim ou remove.
+**R6 — Quotes verified by code.** When the raw cells exist (always, in a real run),
+EVERY attributed quote and every epigraph goes through the quote verifier: verbatim against the card of
+the advisor it was attributed to, exit 0 mandatory. An unverified quote does not reach the decision-maker
+— fix it to the verbatim or remove it.
 
-> Ao verificar um dossiê pronto, **18 de 35 quotes falharam**: cortes que mudavam
-> o sentido, emendas entre trechos distantes, e uma frase inteira acrescentada a uma epígrafe.
-> Nenhuma alteração tinha sido intencional. É por isso que esta regra é código e não recomendação.
+> When verifying a finished dossier, **18 of 35 quotes failed**: cuts that changed
+> the meaning, splices between distant passages, and an entire sentence added to an epigraph.
+> None of the alterations had been intentional. That is why this rule is code and not recommendation.
 
 
-## Em aberto
-Não construídos, e portanto não devem ser apresentados como existentes: schema JSON do card ·
-cômputo determinístico dos headlines · versionamento de card ao longo do loop · o tipo
-`indiferente` no mapeamento.
+## Open items
+Not built, and therefore must not be presented as existing: card JSON schema ·
+deterministic computation of the headlines · card versioning across the loop · the
+`indifferent` type in the mapping.

@@ -6,7 +6,7 @@ high-stakes-runs/
 *.egg-info/
 dist/
 build/
-# destino de escrita DEFAULT do motor (`Path.cwd()/outputs`): ledger de custo,
-# catalog-snapshot, células. Quem rodar a ferramenta da raiz do repo geraria isto
-# aqui — e sem esta linha, commitaria o próprio estado de execução.
+# the engine's DEFAULT write target (`Path.cwd()/outputs`): cost ledger,
+# catalog snapshot, cells. Running the tool from the repo root would generate it
+# here — and without this line, the repo would commit its own execution state.
 outputs/

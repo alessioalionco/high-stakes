@@ -1,7 +1,7 @@
 """
-aggregate.py — agregações DETERMINÍSTICAS genéricas (generaliza a camada 1 do
-protótipo): contagens por campo, mean+spread por dimensão,
-piso de ruído. Zero LLM, zero específico-de-caso.
+aggregate.py — generic DETERMINISTIC aggregations (generalizes layer 1 of the
+prototype): counts by field, mean+spread by dimension,
+noise floor. Zero LLM, zero case-specific code.
 """
 
 from __future__ import annotations
@@ -13,8 +13,8 @@ from typing import Any, Callable, Iterable
 
 
 def is_num(x: Any) -> bool:
-    """Número DE VERDADE: rejeita bool (float(True)==1.0 é armadilha) e
-    não-finitos (nan/inf estragariam mean/spread silenciosamente)."""
+    """A REAL number: rejects bool (float(True)==1.0 is a trap) and
+    non-finites (nan/inf would silently ruin mean/spread)."""
     if isinstance(x, bool):
         return False
     try:
@@ -24,7 +24,7 @@ def is_num(x: Any) -> bool:
 
 
 def stats(values: list[float]) -> dict:
-    """mean/min/max/spread/stdev de uma lista numérica (spread = sinal de divergência)."""
+    """mean/min/max/spread/stdev of a numeric list (spread = divergence signal)."""
     if not values:
         return {"n": 0}
     return {
@@ -38,13 +38,13 @@ def stats(values: list[float]) -> dict:
 
 
 def count_by(records: Iterable[dict], getter: Callable[[dict], Any]) -> Counter:
-    """Contagem por valor de campo (getter). None conta como None (não some)."""
+    """Count by field value (getter). None counts as None (does not vanish)."""
     return Counter(getter(r) for r in records)
 
 
 def dim_stats(records: Iterable[dict], dims: list[str],
               getter: Callable[[dict, str], Any]) -> dict[str, dict]:
-    """mean+spread por dimensão: getter(record, dim) -> valor (não-num ignorado)."""
+    """mean+spread by dimension: getter(record, dim) -> value (non-numeric ignored)."""
     recs = list(records)
     out = {}
     for d in dims:
@@ -56,8 +56,8 @@ def dim_stats(records: Iterable[dict], dims: list[str],
 def paired_abs_deltas(main: list[dict], rerun: list[dict],
                       key_fn: Callable[[dict], Any],
                       value_fn: Callable[[dict], Any]) -> list[float]:
-    """Deltas absolutos entre pares (mesma chave) de dois conjuntos de records.
-    Núcleo do piso de ruído: re-run idêntico -> quanto o valor mexe sozinho."""
+    """Absolute deltas between pairs (same key) of two sets of records.
+    Core of the noise floor: identical re-run -> how much the value moves on its own."""
     main_i = {key_fn(r): r for r in main}
     rerun_i = {key_fn(r): r for r in rerun}
     deltas = []
@@ -74,8 +74,8 @@ def paired_abs_deltas(main: list[dict], rerun: list[dict],
 def noise_floor(main: list[dict], rerun: list[dict],
                 key_fn: Callable[[dict], Any],
                 value_fns: dict[str, Callable[[dict], Any]]) -> dict:
-    """Piso de ruído genérico: p/ cada métrica nomeada, média dos |deltas| entre
-    o run principal e a re-rodada idêntica. Só delta ACIMA do piso conta como sinal."""
+    """Generic noise floor: for each named metric, mean of the |deltas| between
+    the main run and the identical re-run. Only a delta ABOVE the floor counts as signal."""
     n_pairs = len({key_fn(r) for r in rerun} & {key_fn(r) for r in main})
     out: dict[str, Any] = {"n_pairs": n_pairs}
     for name, vfn in value_fns.items():
@@ -85,7 +85,7 @@ def noise_floor(main: list[dict], rerun: list[dict],
 
 
 def jaccard(a: set, b: set) -> float | None:
-    """Estabilidade de conjuntos (ex: cards) entre run e re-run."""
+    """Set stability (e.g. cards) between run and re-run."""
     if not a and not b:
         return None
     return round(len(a & b) / len(a | b), 2)

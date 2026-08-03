@@ -1,11 +1,11 @@
-"""Onde estão os recursos do pacote.
+"""Where the package's resources are.
 
-Existe por um motivo só: NADA no motor pode calcular caminho relativo a partir do
-layout do repo de quem escreveu. Fora dali, `parents[2] / ".claude" / ...` aponta pro
-nada — e o erro só aparece na hora do render, depois do dinheiro gasto. Aqui o pacote
-responde onde ele mesmo está.
+It exists for one reason only: NOTHING in the engine may compute a path relative to the
+repo layout of whoever wrote it. Outside that repo, `parents[2] / ".claude" / ...` points
+at nothing — and the error only shows up at render time, after the money is spent. Here
+the package answers where it itself lives.
 
-Uso na linha de comando (o adapter descobre os contratos assim):
+Command-line use (this is how the adapter finds the contracts):
     python -m high_stakes.paths core
     python -m high_stakes.paths assets
 """
@@ -18,8 +18,8 @@ PACKAGE_ROOT = Path(__file__).resolve().parent
 CORE = PACKAGE_ROOT / "core"
 ASSETS = PACKAGE_ROOT / "assets"
 
-# Raiz da instalação (= raiz do plugin): onde vivem boards/ e examples/ que acompanham
-# a distribuição. É só-leitura — o que o usuário edita mora no HIGH_STAKES_HOME dele.
+# Install root (= plugin root): where the boards/ and examples/ that ship with the
+# distribution live. It is read-only — what the user edits lives in their HIGH_STAKES_HOME.
 INSTALL_ROOT = PACKAGE_ROOT.parent
 SHIPPED_BOARDS = INSTALL_ROOT / "boards"
 EXAMPLES = INSTALL_ROOT / "examples"
@@ -32,13 +32,13 @@ _NAMES = {
 
 def get(name: str) -> Path:
     if name not in _NAMES:
-        raise KeyError(f"path desconhecido: {name!r} (use um de {sorted(_NAMES)})")
+        raise KeyError(f"unknown path: {name!r} (use one of {sorted(_NAMES)})")
     return _NAMES[name]
 
 
 def main(argv: list[str]) -> int:
     if len(argv) != 2 or argv[1] in {"-h", "--help"}:
-        print(f"uso: python -m high_stakes.paths <{'|'.join(sorted(_NAMES))}>")
+        print(f"usage: python -m high_stakes.paths <{'|'.join(sorted(_NAMES))}>")
         return 2
     try:
         print(get(argv[1]))

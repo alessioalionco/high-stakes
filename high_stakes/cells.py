@@ -1,25 +1,26 @@
 """
-cells.py — runner GENÉRICO de células sobre eixos arbitrários (contrato 2A do bench-plan).
+cells.py — GENERIC cell runner over arbitrary axes (bench-plan contract 2A).
 
-Generaliza a maquinaria do protótipo (paralelo, skip-existing/resume,
-repair-retry 1x, custo, proveniência, failed explícito) sem NADA específico-de-caso:
-o experimento constrói as messages e o parse; o engine só executa.
+Generalizes the prototype's machinery (parallel, skip-existing/resume,
+1x repair-retry, cost, provenance, explicit failed) with NOTHING case-specific:
+the experiment builds the messages and the parse; the engine only executes.
 
     run_cells(client, tasks, out_dir, concurrency=6) -> list[dict]
 
     CellTask (dict) = {
-      "cell_id": str,            # único no run; vira o nome do arquivo em out_dir
-      "model": str,              # slug OpenRouter
-      "messages": list[dict],    # PRONTAS (o experimento constrói; engine não monta prompt)
-      "parse": Callable[[str], dict],  # levanta SchemaInvalid -> engine faz repair-retry 1x
+      "cell_id": str,            # unique within the run; becomes the filename in out_dir
+      "model": str,              # OpenRouter slug
+      "messages": list[dict],    # READY-MADE (the experiment builds them; the engine never assembles prompts)
+      "parse": Callable[[str], dict],  # raises SchemaInvalid -> engine does 1x repair-retry
       "request": dict,           # max_tokens, temperature, response_format, extra_body, timeout
-      "meta": dict,              # proveniência extra do experimento (arm, persona, item_id, seed...)
+      "meta": dict,              # extra experiment provenance (arm, persona, item_id, seed...)
     }
 
-ENGINE garante: paralelo c/ cap, skip-existing/resume gated por input_hash+prompt_version
-(por hash de input, nunca só por filename), repair-retry 1x, custo/célula, proveniência base
-(status, retries, latency, usage, timestamp, input_hash), failed explícito (célula
-que falha NÃO some). Saída: 1 JSON por célula em out_dir + lista em memória.
+The ENGINE guarantees: parallelism with a cap, skip-existing/resume gated by
+input_hash+prompt_version (by input hash, never by filename alone), 1x repair-retry,
+per-cell cost, base provenance (status, retries, latency, usage, timestamp,
+input_hash), explicit failed (a failing cell does NOT vanish). Output: 1 JSON per
+cell in out_dir + in-memory list.
 """
 
 from __future__ import annotations
@@ -38,11 +39,11 @@ from .or_client import SchemaInvalid
 
 DEFAULT_CONCURRENCY = 6
 
-# truncamentos (constantes nomeadas, não números mágicos)
-REPAIR_ECHO_MAX_CHARS = 2000   # eco da resposta ruim no repair-retry
-RAW_TEXT_MAX_CHARS = 3000      # raw_text persistido em célula failed/exception
+# truncations (named constants, not magic numbers)
+REPAIR_ECHO_MAX_CHARS = 2000   # echo of the bad reply in the repair-retry
+RAW_TEXT_MAX_CHARS = 3000      # raw_text persisted for a failed/exception cell
 
-# proveniência que o ENGINE carimba; meta do experimento não pode sobrescrever
+# provenance the ENGINE stamps; experiment meta must not override it
 _ENGINE_KEYS = {
     "cell_id", "model", "status", "result", "error", "raw_text", "cost_usd",
     "input_hash", "retries", "latency_s", "usage", "provider", "timestamp",
@@ -53,12 +54,12 @@ _SAFE_FILENAME = re.compile(r"[^A-Za-z0-9._@-]+")
 
 
 def cell_filename(cell_id: str) -> str:
-    """Nome de arquivo seguro/estável a partir do cell_id (slug de modelo tem '/')."""
+    """Safe/stable filename derived from the cell_id (model slugs contain '/')."""
     return _SAFE_FILENAME.sub("-", cell_id) + ".json"
 
 
 def write_json_atomic(path: Path, obj: dict) -> None:
-    """Write atômico (tmp + os.replace): nunca deixa JSON meio-escrito em disco."""
+    """Atomic write (tmp + os.replace): never leaves half-written JSON on disk."""
     path = Path(path)
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(obj, indent=2, ensure_ascii=False))
@@ -66,8 +67,8 @@ def write_json_atomic(path: Path, obj: dict) -> None:
 
 
 def load_cells(out_dir: Path) -> list[dict]:
-    """Inverso de run_cells: lê TODAS as células persistidas em out_dir (inclui
-    failed e exception — célula que falha NÃO some). Dir ausente -> []."""
+    """Inverse of run_cells: reads ALL cells persisted in out_dir (including
+    failed and exception — a failing cell does NOT vanish). Missing dir -> []."""
     out_dir = Path(out_dir)
     if not out_dir.exists():
         return []
@@ -75,29 +76,29 @@ def load_cells(out_dir: Path) -> list[dict]:
 
 
 def _check_unique(tasks: list[dict]) -> None:
-    """Rejeita cell_ids duplicados E colisões de filename pós-sanitização ANTES
-    do dispatch (senão células se sobrescrevem silenciosamente em disco)."""
+    """Rejects duplicate cell_ids AND post-sanitization filename collisions BEFORE
+    dispatch (otherwise cells silently overwrite each other on disk)."""
     seen_ids: set[str] = set()
     seen_files: dict[str, str] = {}
     for t in tasks:
         cid = t["cell_id"]
         if cid in seen_ids:
-            raise ValueError(f"cell_id duplicado: {cid!r}")
+            raise ValueError(f"duplicate cell_id: {cid!r}")
         seen_ids.add(cid)
         fn = cell_filename(cid)
         if fn in seen_files:
             raise ValueError(
-                f"colisão de filename pós-sanitização: {cid!r} e "
-                f"{seen_files[fn]!r} -> ambos viram {fn!r}"
+                f"post-sanitization filename collision: {cid!r} and "
+                f"{seen_files[fn]!r} -> both become {fn!r}"
             )
         seen_files[fn] = cid
 
 
 def input_hash_for(model: str, messages: list[dict], request: dict | None = None) -> str:
-    """Hash canônico do INPUT da célula (modelo + messages + request relevante).
+    """Canonical hash of the cell's INPUT (model + messages + relevant request).
 
-    É este hash (junto com prompt_version do meta) que gateia o reuso
-    skip-existing — nunca só o filename.
+    It is this hash (together with the meta's prompt_version) that gates
+    skip-existing reuse — never the filename alone.
     """
     req = {k: v for k, v in (request or {}).items()
            if k in ("max_tokens", "temperature", "response_format", "extra_body")}
@@ -107,13 +108,13 @@ def input_hash_for(model: str, messages: list[dict], request: dict | None = None
 
 
 def _reusable(path: Path, input_hash: str, prompt_version: Any) -> dict | None:
-    """Reuso: só se status ok E input_hash E prompt_version armazenados batem."""
+    """Reuse: only if the stored status is ok AND input_hash AND prompt_version match."""
     if not path.exists():
         return None
     try:
         prev = json.loads(path.read_text())
     except (json.JSONDecodeError, OSError):
-        return None  # corrompida -> re-roda
+        return None  # corrupted -> re-run
     if prev.get("status") != "ok":
         return None
     if prev.get("input_hash") != input_hash:
@@ -124,7 +125,7 @@ def _reusable(path: Path, input_hash: str, prompt_version: Any) -> dict | None:
 
 
 def run_cell(client, task: dict, out_dir: Path) -> dict:
-    """Executa UMA célula: chat -> parse (repair-retry 1x) -> JSON em disco."""
+    """Runs ONE cell: chat -> parse (1x repair-retry) -> JSON on disk."""
     cell_id = task["cell_id"]
     model = task["model"]
     messages = task["messages"]
@@ -146,11 +147,11 @@ def run_cell(client, task: dict, out_dir: Path) -> dict:
     parsed = None
     last_err = None
     exception_err = None
-    cell_cost = 0.0  # acumula AMBAS as tentativas (o ledger já bilou as 2)
+    cell_cost = 0.0  # accumulates BOTH attempts (the ledger already billed both)
     out: dict = {}
     cur_messages = messages
     try:
-        for _attempt in range(2):  # 1 tentativa + 1 repair
+        for _attempt in range(2):  # 1 attempt + 1 repair
             out = client.chat(model, cur_messages, **request)
             cell_cost += out["cost_usd"]
             try:
@@ -162,23 +163,24 @@ def run_cell(client, task: dict, out_dir: Path) -> dict:
                 cur_messages = messages + [
                     {"role": "assistant", "content": out["text"][:REPAIR_ECHO_MAX_CHARS]},
                     {"role": "user", "content":
-                        f"Sua resposta não seguiu o formato exigido ({e}). "
-                        "Responda AGORA somente no formato exigido, nada mais."},
+                        f"Your reply did not follow the required format ({e}). "
+                        "Reply NOW in the required format only, nothing else."},
                 ]
-    except Exception as e:  # noqa: BLE001 — chat levantou, ou parse levantou ≠ SchemaInvalid
+    except Exception as e:  # noqa: BLE001 — chat raised, or parse raised something ≠ SchemaInvalid
         exception_err = f"{type(e).__name__}: {e}"
-        # O cap pode estourar DEPOIS de a chamada ter sido paga: o `reconcile` do ledger
-        # levanta com o custo real já debitado. Nesse caso a exceção carrega a resposta em
-        # `.resposta` — e ignorá-la joga fora um texto que custou dinheiro, registra
-        # `cost_usd: 0` e deixa a célula elegível para re-rodar (e pagar de novo). A
-        # atribuição de `out` no `try` nunca completou, então sem isto ela fica `{}`.
-        paga = getattr(e, "resposta", None)
-        if isinstance(paga, dict) and paga.get("text") is not None:
-            out = paga
-            cell_cost += paga.get("cost_usd", 0.0) or 0.0
+        # The cap can blow AFTER the call has been paid for: the ledger's `reconcile`
+        # raises with the real cost already debited. In that case the exception carries
+        # the response in `.response` — and ignoring it throws away text that cost money,
+        # records `cost_usd: 0`, and leaves the cell eligible to re-run (and pay again).
+        # The assignment to `out` inside the `try` never completed, so without this it
+        # stays `{}`.
+        paid = getattr(e, "response", None)
+        if isinstance(paid, dict) and paid.get("text") is not None:
+            out = paid
+            cell_cost += paid.get("cost_usd", 0.0) or 0.0
             try:
-                parsed = parse(paga["text"])
-            except Exception:  # noqa: BLE001 — salvar o texto pago vale mesmo sem parse
+                parsed = parse(paid["text"])
+            except Exception:  # noqa: BLE001 — saving the paid text is worth it even unparsed
                 pass
 
     base = {k: v for k, v in meta.items() if k not in _ENGINE_KEYS}
@@ -194,14 +196,14 @@ def run_cell(client, task: dict, out_dir: Path) -> dict:
         "timestamp": datetime.now(timezone.utc).isoformat(),
     })
     if exception_err is not None:
-        # invariante: célula que falha NÃO some — exception também PERSISTE em disco
+        # invariant: a failing cell does NOT vanish — exceptions PERSIST to disk too
         base["status"] = "exception"
         base["error"] = exception_err
-        if out.get("text"):  # houve resposta paga -> preserva o material
+        if out.get("text"):  # there was a paid response -> preserve the material
             base["raw_text"] = out["text"][:RAW_TEXT_MAX_CHARS]
     elif parsed is None:
-        base["status"] = "failed"  # 3º estado: não-parseável, explícito, nunca some
-        base["error"] = last_err or "parse inválido após repair"
+        base["status"] = "failed"  # 3rd state: unparseable, explicit, never vanishes
+        base["error"] = last_err or "invalid parse after repair"
         base["raw_text"] = (out.get("text") or "")[:RAW_TEXT_MAX_CHARS]
     else:
         base["status"] = "ok"
@@ -214,13 +216,13 @@ def run_cell(client, task: dict, out_dir: Path) -> dict:
 def run_cells(client, tasks: list[dict], out_dir: Path,
               concurrency: int = DEFAULT_CONCURRENCY,
               label: str = "cells", quiet: bool = False) -> list[dict]:
-    """Roda a lista de células em paralelo (cap `concurrency`). Falha vira
-    status=exception PERSISTIDA em disco (não derruba as demais); célula failed
-    persiste. cell_ids duplicados/colisão de filename -> ValueError ANTES do dispatch."""
+    """Runs the list of cells in parallel (cap `concurrency`). A failure becomes
+    status=exception PERSISTED to disk (does not take the others down); a failed
+    cell persists. Duplicate cell_ids/filename collision -> ValueError BEFORE dispatch."""
     _check_unique(tasks)
     out_dir.mkdir(parents=True, exist_ok=True)
     if not quiet:
-        print(f"[{label}] {len(tasks)} células (cap {concurrency} simultâneas)")
+        print(f"[{label}] {len(tasks)} cells (cap {concurrency} concurrent)")
     results: list[dict] = []
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
         futs = {pool.submit(run_cell, client, t, out_dir): t["cell_id"] for t in tasks}
@@ -234,15 +236,15 @@ def run_cells(client, tasks: list[dict], out_dir: Path,
                           f"${cell.get('cost_usd', 0):.4f}"
                           + (f"  (retries {cell['retries']})" if cell.get("retries") else ""))
                 results.append(cell)
-            except Exception as e:  # noqa: BLE001 — 1 célula não derruba o run
+            except Exception as e:  # noqa: BLE001 — 1 cell does not take the run down
                 if not quiet:
-                    print(f"  ERRO   {cid}: {type(e).__name__}: {e}")
+                    print(f"  ERROR  {cid}: {type(e).__name__}: {e}")
                 rec = {"cell_id": cid, "status": "exception",
                        "error": f"{type(e).__name__}: {e}",
                        "timestamp": datetime.now(timezone.utc).isoformat()}
-                try:  # backstop: mesmo erro fora do run_cell PERSISTE (não some)
+                try:  # backstop: even an error outside run_cell PERSISTS (does not vanish)
                     write_json_atomic(out_dir / cell_filename(cid), rec)
                 except OSError:
-                    pass  # sem disco não há o que persistir; fica na lista em memória
+                    pass  # with no disk there is nothing to persist; it stays in the in-memory list
                 results.append(rec)
     return results

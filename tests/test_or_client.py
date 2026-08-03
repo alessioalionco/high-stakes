@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""test_or_client.py — suíte executável do caminho do DINHEIRO (convenção deste projeto).
+"""test_or_client.py — executable suite for the MONEY path (this project's convention).
 
-Cobre três lacunas que eram falhas SILENCIOSAS (o motor seguia rodando e dando cap por
-bom, gastando 2x):
+Covers three gaps that used to be SILENT failures (the engine kept running and called
+the cap good, spending 2x):
 
-  T11 — cliente HTTP sobre a stdlib. Contra um servidor http.server de verdade, não mock:
-        se `urllib` divergir do contrato que o retry espera (não-2xx tem de voltar como
-        RESPOSTA, com Retry-After legível), o 429 vira erro terminal e o run morre.
-  T4  — cap CROSS-PROCESSO. Dois processos no mesmo run liam `spent=0` e o último write
-        vencia: cap furado em 2x, sem sinal nenhum.
-  T5  — cobrança no fracasso. Stream dropado pode ter sido cobrado upstream; se a falha
-        não debitar, o cap superestima o orçamento restante.
+  T11 — HTTP client on top of the stdlib. Against a real http.server, not a mock:
+        if `urllib` diverges from the contract the retry expects (non-2xx must come
+        back as a RESPONSE, with a readable Retry-After), the 429 becomes a terminal
+        error and the run dies.
+  T4  — CROSS-PROCESS cap. Two processes in the same run read `spent=0` and the last
+        write won: cap breached 2x, with no signal at all.
+  T5  — billing on failure. A dropped stream may have been billed upstream; if the
+        failure does not debit, the cap overestimates the remaining budget.
 """
 import json
 import math
@@ -31,18 +32,18 @@ import urllib.request
 from high_stakes import http_client
 from high_stakes.http_client import DeadlineExceeded, RequestException, Session
 
-ROOT = Path(__file__).resolve().parents[1]  # raiz do repo/plugin
+ROOT = Path(__file__).resolve().parents[1]  # repo/plugin root
 
 
-# ---------------------------------------------------------------- servidor de teste
+# ---------------------------------------------------------------- test server
 class Handler(BaseHTTPRequestHandler):
-    """mode é de CLASSE: cada teste ajusta antes de chamar."""
+    """mode is CLASS-level: each test sets it before calling."""
     mode = "ok"
     hits = 0
     trap_url = ""
     trap_headers = None
 
-    def log_message(self, *a):  # silencia o log do http.server
+    def log_message(self, *a):  # silences http.server's log
         pass
 
     def _send(self, code, body: bytes, headers: dict | None = None):
@@ -62,11 +63,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, body, {"Content-Type": "application/json"})
         if self.path == "/echo-headers":
             return self._send(200, json.dumps(dict(self.headers)).encode())
-        if self.path == "/redirect-para-armadilha":
+        if self.path == "/redirect-to-trap":
             return self._send(302, b"", {"Location": Handler.trap_url})
-        if self.path == "/armadilha":
+        if self.path == "/trap":
             Handler.trap_headers = dict(self.headers)
-            return self._send(200, b"peguei")
+            return self._send(200, b"gotcha")
         if self.path == "/429":
             return self._send(429, b"slow down", {"Retry-After": "7"})
         if self.path == "/400":
@@ -81,9 +82,10 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/echo":
             return self._send(200, raw, {"Content-Type": "application/json"})
         Handler.hits += 1
-        if Handler.mode == "corta_no_meio":
-            # headers + corpo PARCIAL, depois derruba: a falha dominante numa chamada
-            # longa de streaming. Content-Length maior que o enviado força erro de leitura.
+        if Handler.mode == "cut_midstream":
+            # headers + PARTIAL body, then drops: the dominant failure in a long
+            # streaming call. A Content-Length larger than what is sent forces a read
+            # error.
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Content-Length", "9999")
@@ -94,44 +96,46 @@ class Handler(BaseHTTPRequestHandler):
             return
         if Handler.mode == "always_500":
             return self._send(500, b"upstream boom")
-        if Handler.mode == "erro_429_no_corpo":
-            # 200 no header, erro 429 NO CORPO do stream. Rate limit = o provedor
-            # RECUSOU; nada foi gerado e nada foi cobrado lá. As duas primeiras
-            # tentativas recusam, a terceira responde de verdade.
+        if Handler.mode == "error_429_in_body":
+            # 200 in the header, a 429 error IN THE BODY of the stream. Rate limit =
+            # the provider REFUSED; nothing was generated and nothing was billed
+            # there. The first two attempts refuse, the third answers for real.
             if Handler.hits <= 2:
                 body = (b'data: {"error":{"code":429,"message":"rate limited"}}\n\n')
                 return self._send(200, body, {"Content-Type": "text/event-stream"})
             sse_ok = (
-                b'data: {"choices":[{"delta":{"content":"oi"}}],'
+                b'data: {"choices":[{"delta":{"content":"hi"}}],'
                 b'"usage":{"cost":0.5,"prompt_tokens":10,"completion_tokens":2}}\n\n'
                 b"data: [DONE]\n\n"
             )
             return self._send(200, sse_ok, {"Content-Type": "text/event-stream"})
-        if Handler.mode == "so_429_sempre":
-            # 429 limpo no HEADER, em toda tentativa: o provedor DIZ que recusou.
-            # Nada gerado, nada cobrado la em cima.
+        if Handler.mode == "only_429_always":
+            # a clean 429 in the HEADER, on every attempt: the provider SAYS it
+            # refused. Nothing generated, nothing billed up there.
             return self._send(429, b"slow down", {"Retry-After": "0"})
-        if Handler.mode == "conteudo_e_dai_429":
-            # conteudo REAL e SO ENTAO o 429 no corpo: foi gerado (e cobrado) antes da
-            # recusa. O codigo do erro sozinho diria "nao cobrar" -- e erraria.
-            body = (b'data: {"choices":[{"delta":{"content":"resposta de verdade"}}]}\n\n'
+        if Handler.mode == "content_then_429":
+            # REAL content and ONLY THEN the 429 in the body: it was generated (and
+            # billed) before the refusal. The error code alone would say "do not
+            # charge" — and it would be wrong.
+            body = (b'data: {"choices":[{"delta":{"content":"a real answer"}}]}\n\n'
                     b'data: {"error":{"code":429,"message":"rate limited"}}\n\n')
             return self._send(200, body, {"Content-Type": "text/event-stream"})
-        if Handler.mode == "custo_nan":
-            # o provedor reporta custo NaN no usage: e a outra porta (alem do pricing)
-            # por onde um numero nao-finito entra e desliga o teto.
-            body = (b'data: {"choices":[{"delta":{"content":"oi"}}],'
+        if Handler.mode == "cost_nan":
+            # the provider reports a NaN cost in usage: the other door (besides
+            # pricing) through which a non-finite number gets in and turns off the
+            # ceiling.
+            body = (b'data: {"choices":[{"delta":{"content":"hi"}}],'
                     b'"usage":{"cost":NaN,"prompt_tokens":10,"completion_tokens":2}}\n\n'
                     b"data: [DONE]\n\n")
             return self._send(200, body, {"Content-Type": "text/event-stream"})
-        if Handler.mode == "sem_done":
-            # gera conteúdo de verdade e o stream acaba SEM [DONE]: houve geração
-            # (e cobrança lá em cima), mas a resposta não fecha. Sempre.
-            body = b'data: {"choices":[{"delta":{"content":"parcial"}}]}\n\n'
+        if Handler.mode == "no_done":
+            # generates real content and the stream ends WITHOUT [DONE]: there was
+            # generation (and billing up there), but the response never closes. Always.
+            body = b'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n'
             return self._send(200, body, {"Content-Type": "text/event-stream"})
         sse = (
-            b'data: {"choices":[{"delta":{"content":"oi"}}]}\n\n'
-            b'data: {"choices":[{"delta":{"content":" mundo"}}],'
+            b'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n'
+            b'data: {"choices":[{"delta":{"content":" world"}}],'
             b'"usage":{"cost":0.5,"prompt_tokens":10,"completion_tokens":2}}\n\n'
             b"data: [DONE]\n\n"
         )
@@ -144,9 +148,10 @@ def start_server() -> tuple[HTTPServer, str]:
     return srv, f"http://127.0.0.1:{srv.server_port}"
 
 
-# ---------------------------------------------------------------- T4: subprocessos
-# Roda em processo separado: reserva, segura a reserva, e só então reconcilia — a janela
-# em que o OUTRO processo precisa enxergar a reserva pra não furar o cap.
+# ---------------------------------------------------------------- T4: subprocesses
+# Runs in a separate process: reserves, holds the reservation, and only then
+# reconciles — the window in which the OTHER process must see the reservation so it
+# does not breach the cap.
 CHILD = """
 import sys, time, json
 sys.path.insert(0, {root!r})
@@ -182,248 +187,252 @@ def main() -> int:
     try:
         s = Session()
 
-        # ---- T11: cliente HTTP contra servidor real ----
+        # ---- T11: HTTP client against a real server ----
         r = s.get(f"{base}/api/v1/models", timeout=5)
-        case("GET 200 + .json() decodifica",
+        case("GET 200 + .json() decodes",
              r.status_code == 200 and r.json()["data"][0]["id"] == "test/model")
 
-        r = s.post(f"{base}/echo", json={"a": 1, "b": "ç"}, timeout=5)
-        case("POST envia JSON (round-trip preserva unicode)", r.json() == {"a": 1, "b": "ç"})
+        r = s.post(f"{base}/echo", json={"a": 1, "b": "ü"}, timeout=5)
+        case("POST sends JSON (round-trip preserves unicode)", r.json() == {"a": 1, "b": "ü"})
 
         r = s.post(f"{base}/echo", headers={"X-Title": "hs"}, json={}, timeout=5)
-        case("POST seta Content-Type sozinho", r.status_code == 200)
+        case("POST sets Content-Type on its own", r.status_code == 200)
 
         r = s.get(f"{base}/429", timeout=5)
-        case("REGRESSÃO T11: 429 volta como RESPOSTA, não exceção (senão o retry morre)",
+        case("REGRESSION T11: 429 comes back as a RESPONSE, not an exception (else the retry dies)",
              r.status_code == 429)
-        case("REGRESSÃO T11: Retry-After legível na resposta de erro",
+        case("REGRESSION T11: Retry-After readable on the error response",
              r.headers.get("Retry-After") == "7")
-        case("corpo do erro de 429 legível em .text", "slow down" in r.text)
+        case("429 error body readable via .text", "slow down" in r.text)
 
         r = s.get(f"{base}/400", timeout=5)
-        case("4xx terminal também volta como resposta com corpo",
+        case("terminal 4xx also comes back as a response with a body",
              r.status_code == 400 and "bad request" in r.text)
 
         r = s.get(f"{base}/lines", timeout=5)
-        case("iter_lines devolve linhas sem terminador (\\n e \\r\\n)",
+        case("iter_lines yields lines without the terminator (\\n and \\r\\n)",
              list(r.iter_lines()) == [b"alpha", b"beta", b"gamma"])
 
         try:
-            s.get("http://127.0.0.1:1/nada", timeout=2)
-            case("erro de transporte vira RequestException", False)
+            s.get("http://127.0.0.1:1/nothing", timeout=2)
+            case("transport error becomes RequestException", False)
         except RequestException:
-            case("erro de transporte vira RequestException", True)
+            case("transport error becomes RequestException", True)
         except Exception as e:
-            case(f"erro de transporte vira RequestException (veio {type(e).__name__})", False)
+            case(f"transport error becomes RequestException (got {type(e).__name__})", False)
 
         r = s.get(f"{base}/echo-headers", timeout=5)
-        case("Accept-Encoding: identity é explícito (urllib não descomprime)",
+        case("Accept-Encoding: identity is explicit (urllib does not decompress)",
              r.json().get("Accept-Encoding") == "identity")
 
-        # ---- REGRESSÃO DE SEGURANÇA: a chave não pode viajar num redirect ----
-        # O handler padrão do urllib reenvia TODOS os headers ao destino do 3xx, inclusive
-        # Authorization — e o destino pode ser outro host. O `requests` remove auth
-        # cross-host; reimplementar sem essa trava vazava a chave para quem controlasse o
-        # redirect. PoC confirmado antes do fix: o 2º host recebeu o Bearer.
+        # ---- SECURITY REGRESSION: the key must not travel on a redirect ----
+        # urllib's default handler re-sends ALL headers to the 3xx destination,
+        # including Authorization — and the destination can be another host. `requests`
+        # strips auth cross-host; reimplementing without that guard leaked the key to
+        # whoever controlled the redirect. PoC confirmed before the fix: the 2nd host
+        # received the Bearer.
         srv2, base2 = start_server()
         try:
-            Handler.trap_url = f"{base2}/armadilha"
+            Handler.trap_url = f"{base2}/trap"
             Handler.trap_headers = None
-            r = s.get(f"{base}/redirect-para-armadilha",
-                      headers={"Authorization": "Bearer sk-NAO-PODE-VAZAR"}, timeout=5)
-            case("REGRESSÃO: redirect NÃO é seguido — 3xx volta como resposta terminal",
+            r = s.get(f"{base}/redirect-to-trap",
+                      headers={"Authorization": "Bearer sk-MUST-NOT-LEAK"}, timeout=5)
+            case("REGRESSION: redirect is NOT followed — 3xx comes back as a terminal response",
                  r.status_code == 302)
-            vazou = (Handler.trap_headers or {}).get("Authorization")
-            case(f"REGRESSÃO CRÍTICA: a chave NÃO chega ao destino do redirect"
-                 f"{' — VAZOU: ' + str(vazou) if vazou else ''}",
+            leaked = (Handler.trap_headers or {}).get("Authorization")
+            case(f"CRITICAL REGRESSION: the key does NOT reach the redirect target"
+                 f"{' — LEAKED: ' + str(leaked) if leaked else ''}",
                  Handler.trap_headers is None)
         finally:
             srv2.shutdown()
 
-        case("o cliente usa opener PRÓPRIO, não o global do processo",
+        case("the client uses its OWN opener, not the process-global one",
              Session._get_opener() is not urllib.request._opener)
 
-        # ---- REGRESSÃO: corpo remoto tem teto ----
-        case("existe teto por linha e por corpo (DoS por corpo sem newline)",
+        # ---- REGRESSION: the remote body has a ceiling ----
+        case("per-line and per-body ceilings exist (DoS via body with no newline)",
              http_client.MAX_LINE_BYTES > 0 and http_client.MAX_BODY_BYTES > 0)
 
-        # ---- REGRESSÃO: prazo de PAREDE, não só timeout de socket ----
+        # ---- REGRESSION: WALL-CLOCK deadline, not just socket timeout ----
         r = s.get(f"{base}/lines", timeout=5)
-        r._deadline = time.monotonic() - 1  # já vencido
+        r._deadline = time.monotonic() - 1  # already expired
         try:
             list(r.iter_lines())
-            case("REGRESSÃO: prazo de parede vencido interrompe a leitura", False)
+            case("REGRESSION: an expired wall-clock deadline interrupts the read", False)
         except DeadlineExceeded:
-            case("REGRESSÃO: prazo de parede vencido interrompe a leitura", True)
+            case("REGRESSION: an expired wall-clock deadline interrupts the read", True)
 
-        # REGRESSÃO: o prazo é TERMINAL. Se herdasse de RequestException, o retry o
-        # trataria como transiente e a espera viraria 4× o timeout, queimando 4 gerações.
-        case("REGRESSÃO: prazo de parede NÃO é transporte (não entra no retry)",
+        # REGRESSION: the deadline is TERMINAL. If it inherited from RequestException,
+        # the retry would treat it as transient and the wait would become 4× the
+        # timeout, burning 4 generations.
+        case("REGRESSION: the wall-clock deadline is NOT transport (does not enter the retry)",
              not issubclass(DeadlineExceeded, (RequestException, OSError)))
 
-        # REGRESSÃO: .text é lido em todo 429/5xx — também respeita o prazo
+        # REGRESSION: .text is read on every 429/5xx — it honors the deadline too
         r = s.get(f"{base}/429", timeout=5)
         r._deadline = time.monotonic() - 1
         try:
             _ = r.text
-            case("REGRESSÃO: .text respeita o prazo de parede", False)
+            case("REGRESSION: .text honors the wall-clock deadline", False)
         except DeadlineExceeded:
-            case("REGRESSÃO: .text respeita o prazo de parede", True)
+            case("REGRESSION: .text honors the wall-clock deadline", True)
 
-        # ---- integração: chat() completo contra o servidor ----
+        # ---- integration: full chat() against the server ----
         or_client.OPENROUTER_BASE = f"{base}/api/v1"
-        or_client.ORClient._sleep_backoff = staticmethod(lambda *a, **k: None)  # sem espera
+        or_client.ORClient._sleep_backoff = staticmethod(lambda *a, **k: None)  # no waiting
 
         led = BudgetLedger(cap_usd=10.0, ledger_path=tmp / "run1" / "cost-ledger.json")
         c = ORClient(ledger=led, api_key="k", outputs_dir=tmp / "run1")
-        out = c.chat("test/model", [{"role": "user", "content": "oi"}], max_tokens=16)
-        case("chat() acumula SSE e devolve texto", out["text"] == "oi mundo")
-        case("chat() usa usage.cost do provider", out["cost_usd"] == 0.5)
-        case("ledger contabiliza o custo real", abs(led.spent - 0.5) < 1e-9)
-        case("reserva foi solta após reconcile", led.snapshot()["reserved_usd"] == 0.0)
+        out = c.chat("test/model", [{"role": "user", "content": "hi"}], max_tokens=16)
+        case("chat() accumulates SSE and returns text", out["text"] == "hi world")
+        case("chat() uses the provider's usage.cost", out["cost_usd"] == 0.5)
+        case("ledger books the real cost", abs(led.spent - 0.5) < 1e-9)
+        case("reservation released after reconcile", led.snapshot()["reserved_usd"] == 0.0)
 
         disk = json.loads((tmp / "run1" / "cost-ledger.json").read_text())
-        case("ledger no DISCO reflete o gasto", abs(disk["spent_usd"] - 0.5) < 1e-9)
-        case("reserva não fica órfã no disco", not disk.get("reservations"))
+        case("ledger on DISK reflects the spend", abs(disk["spent_usd"] - 0.5) < 1e-9)
+        case("no reservation left orphaned on disk", not disk.get("reservations"))
 
-        # ---- T5: falha pós-dispatch é COBRADA ----
+        # ---- T5: post-dispatch failure is CHARGED ----
         Handler.mode = "always_500"
         led2 = BudgetLedger(cap_usd=10.0, ledger_path=tmp / "run2" / "cost-ledger.json")
         c2 = ORClient(ledger=led2, api_key="k", outputs_dir=tmp / "run2")
         Handler.hits = 0
         try:
-            c2.chat("test/model", [{"role": "user", "content": "oi"}], max_tokens=16)
-            case("REGRESSÃO T5: falha propaga", False)
+            c2.chat("test/model", [{"role": "user", "content": "hi"}], max_tokens=16)
+            case("REGRESSION T5: failure propagates", False)
         except RuntimeError:
-            case("REGRESSÃO T5: falha propaga", True)
-        case("REGRESSÃO T5: 500 é retriável (tentou MAX_RETRIES vezes)",
+            case("REGRESSION T5: failure propagates", True)
+        case("REGRESSION T5: 500 is retriable (tried MAX_RETRIES times)",
              Handler.hits == or_client.MAX_RETRIES)
-        case("REGRESSÃO T5: estimativa é COBRADA no fracasso (stream pode ter sido cobrado)",
+        case("REGRESSION T5: the estimate is CHARGED on failure (the stream may have been billed)",
              led2.spent > 0)
         d2 = json.loads((tmp / "run2" / "cost-ledger.json").read_text())
-        case("REGRESSÃO T5: cobrança do fracasso PERSISTE no disco", d2["spent_usd"] > 0)
-        case("REGRESSÃO T5: reserva do fracasso não fica órfã", not d2.get("reservations"))
+        case("REGRESSION T5: the failure charge PERSISTS on disk", d2["spent_usd"] > 0)
+        case("REGRESSION T5: the failure's reservation is not left orphaned",
+             not d2.get("reservations"))
         led2b = BudgetLedger(cap_usd=10.0, ledger_path=tmp / "run2" / "cost-ledger.json")
-        case("REGRESSÃO T5: instância nova herda o gasto (cap não reseta)",
+        case("REGRESSION T5: a new instance inherits the spend (cap does not reset)",
              abs(led2b.spent - led2.spent) < 1e-9)
         Handler.mode = "ok"
 
-        # ---- REGRESSÃO: ledger ilegível FALHA FECHADO ----
-        # Tratar ledger corrompido como "gasto zero" devolvia o cap inteiro — o oposto do
-        # que o reserve-then-reconcile existe para garantir. Reproduzido no review:
-        # $54 gastos viravam $0 e o processo reservava de novo.
+        # ---- REGRESSION: an unreadable ledger FAILS CLOSED ----
+        # Treating a corrupted ledger as "zero spend" gave the whole cap back — the
+        # opposite of what reserve-then-reconcile exists to guarantee. Reproduced in
+        # review: $54 spent became $0 and the process reserved again.
         pc = tmp / "corr" / "cost-ledger.json"
         pc.parent.mkdir(parents=True)
         lc = BudgetLedger(cap_usd=10.0, ledger_path=pc)
         lc.reserve(4.0); lc.reconcile(4.0, 4.0)
-        pc.write_text('{"spent_usd": 4.0, "cal')  # truncado no meio de um write
+        pc.write_text('{"spent_usd": 4.0, "cal')  # truncated mid-write
         try:
             BudgetLedger(cap_usd=10.0, ledger_path=pc)
-            case("REGRESSÃO: ledger truncado RECUSA dispatch (não devolve o cap)", False)
+            case("REGRESSION: a truncated ledger REFUSES dispatch (does not return the cap)", False)
         except or_client.LedgerCorrupted:
-            case("REGRESSÃO: ledger truncado RECUSA dispatch (não devolve o cap)", True)
+            case("REGRESSION: a truncated ledger REFUSES dispatch (does not return the cap)", True)
 
-        pv = tmp / "vazio" / "cost-ledger.json"
+        pv = tmp / "empty" / "cost-ledger.json"
         pv.parent.mkdir(parents=True); pv.write_text("")
-        case("ledger AUSENTE ou vazio segue sendo run novo legítimo",
+        case("an ABSENT or empty ledger is still a legitimate new run",
              BudgetLedger(cap_usd=10.0, ledger_path=pv).spent == 0.0)
 
-        # ---- O que o cap por-run protege: o GASTO acumula ----
-        # Este bloco testava `min(cap da instância, cap no disco)`. Esse desenho foi
-        # REVERTIDO — ver a nota no __init__ do BudgetLedger. Ele envenenava o ledger de
-        # forma irreversível e não protegia no caso em que a instância de cap baixo era
-        # recusada. O que precisa valer, e vale, é o acúmulo do gasto entre instâncias:
-        # cada uma para no teto DELA contra o total já gasto no run.
+        # ---- What the per-run cap protects: the SPEND accumulates ----
+        # This block used to test `min(instance cap, cap on disk)`. That design was
+        # REVERTED — see the note in BudgetLedger's __init__. It poisoned the ledger
+        # irreversibly and did not protect in the case where the low-cap instance was
+        # refused. What must hold, and does, is spend accumulation across instances:
+        # each one stops at ITS OWN ceiling against the run's total already spent.
         pm = tmp / "cap" / "cost-ledger.json"
         pm.parent.mkdir(parents=True)
         a5 = BudgetLedger(cap_usd=5.0, ledger_path=pm)
         a5.reserve(4.0); a5.reconcile(4.0, 4.0)
-        a5b = BudgetLedger(cap_usd=5.0, ledger_path=pm)   # mesmo teto, mesmo run
+        a5b = BudgetLedger(cap_usd=5.0, ledger_path=pm)   # same ceiling, same run
         try:
-            a5b.reserve(2.0)   # 4 já gastos + 2 = 6 > 5
-            case("cap por-run: o gasto de outra instância CONTA contra o meu teto", False)
+            a5b.reserve(2.0)   # 4 already spent + 2 = 6 > 5
+            case("per-run cap: another instance's spend COUNTS against my ceiling", False)
         except BudgetExceeded:
-            case("cap por-run: o gasto de outra instância CONTA contra o meu teto", True)
+            case("per-run cap: another instance's spend COUNTS against my ceiling", True)
 
-        # ---- REGRESSÃO: extra_body não pode furar a estimativa ----
+        # ---- REGRESSION: extra_body must not bypass the estimate ----
         led_x = BudgetLedger(cap_usd=10.0, persist=False)
         cx = ORClient(ledger=led_x, api_key="k", outputs_dir=tmp / "x")
         cx._catalog = {"test/model": {"pricing": {"prompt": "0.000001",
                                                   "completion": "0.000002"}}}
-        for campo, valor in (("max_tokens", 200000), ("model", "caro/model")):
+        for field, value in (("max_tokens", 200000), ("model", "expensive/model")):
             try:
-                cx.chat("test/model", [{"role": "user", "content": "oi"}], max_tokens=16,
-                        extra_body={campo: valor})
-                case(f"REGRESSÃO: extra_body['{campo}'] é REJEITADO (furaria o cap)", False)
+                cx.chat("test/model", [{"role": "user", "content": "hi"}], max_tokens=16,
+                        extra_body={field: value})
+                case(f"REGRESSION: extra_body['{field}'] is REJECTED (would breach the cap)", False)
             except ValueError:
-                case(f"REGRESSÃO: extra_body['{campo}'] é REJEITADO (furaria o cap)",
+                case(f"REGRESSION: extra_body['{field}'] is REJECTED (would breach the cap)",
                      led_x.snapshot()["reserved_usd"] == 0.0)
 
-        # ---- REGRESSÃO: falha NO MEIO do stream re-entra no retry ----
-        Handler.mode = "corta_no_meio"; Handler.hits = 0
+        # ---- REGRESSION: a failure MID-stream re-enters the retry ----
+        Handler.mode = "cut_midstream"; Handler.hits = 0
         led_m = BudgetLedger(cap_usd=10.0, ledger_path=tmp / "mid" / "cost-ledger.json")
         cm = ORClient(ledger=led_m, api_key="k", outputs_dir=tmp / "mid")
         try:
-            cm.chat("test/model", [{"role": "user", "content": "oi"}], max_tokens=16)
+            cm.chat("test/model", [{"role": "user", "content": "hi"}], max_tokens=16)
         except Exception:
             pass
-        case("REGRESSÃO: queda no meio do stream é RETENTADA, não 1 tentativa de 4",
+        case("REGRESSION: a drop mid-stream is RETRIED, not 1 attempt out of 4",
              Handler.hits == or_client.MAX_RETRIES)
         Handler.mode = "ok"
 
-        # ---- REGRESSÃO: o TTL da reserva cobre o pior caso de uma chamada ----
-        case("REGRESSÃO: TTL > MAX_RETRIES × timeout máximo (não poda reserva em voo)",
+        # ---- REGRESSION: the reservation TTL covers a call's worst case ----
+        case("REGRESSION: TTL > MAX_RETRIES × max timeout (does not prune an in-flight reservation)",
              or_client.RESERVATION_TTL_S >= or_client.MAX_RETRIES * 1200)
 
-        # ---- REGRESSÃO: tentativas que JÁ GERARAM são cobradas ----
-        # O retry redispara até MAX_RETRIES gerações completas e o ledger contabilizava
-        # UMA: subcontagem de até 4x, invisível para o cap. Reproduzido no review com um
-        # stream completo faltando só o [DONE]: 4 dispatches reais, $0.20 registrado.
-        Handler.mode = "corta_no_meio"; Handler.hits = 0
-        led_g = BudgetLedger(cap_usd=50.0, ledger_path=tmp / "ger" / "cost-ledger.json")
-        cg = ORClient(ledger=led_g, api_key="k", outputs_dir=tmp / "ger")
-        antes = led_g.spent
+        # ---- REGRESSION: attempts that ALREADY GENERATED are charged ----
+        # The retry re-dispatches up to MAX_RETRIES full generations and the ledger
+        # booked ONE: an undercount of up to 4x, invisible to the cap. Reproduced in
+        # review with a complete stream missing only the [DONE]: 4 real dispatches,
+        # $0.20 recorded.
+        Handler.mode = "cut_midstream"; Handler.hits = 0
+        led_g = BudgetLedger(cap_usd=50.0, ledger_path=tmp / "gen" / "cost-ledger.json")
+        cg = ORClient(ledger=led_g, api_key="k", outputs_dir=tmp / "gen")
+        before = led_g.spent
         try:
-            cg.chat("test/model", [{"role": "user", "content": "oi"}], max_tokens=16)
+            cg.chat("test/model", [{"role": "user", "content": "hi"}], max_tokens=16)
         except Exception:
             pass
-        case("REGRESSÃO: as 4 tentativas geradas somam no gasto, não 1",
-             led_g.spent > antes and Handler.hits == or_client.MAX_RETRIES)
+        case("REGRESSION: all 4 generated attempts add to the spend, not 1",
+             led_g.spent > before and Handler.hits == or_client.MAX_RETRIES)
         Handler.mode = "ok"
 
-        # ---- T4: cap cross-processo ----
+        # ---- T4: cross-process cap ----
         p4 = tmp / "run4" / "cost-ledger.json"
         outs = run_children(p4, cap=1.0, amount=0.6, hold=1.0)
-        case(f"REGRESSÃO T4: 2 processos, cap $1, $0.60 cada -> só 1 gasta (veio {outs})",
+        case(f"REGRESSION T4: 2 processes, $1 cap, $0.60 each -> only 1 spends (got {outs})",
              sorted(outs) == ["BLOCKED", "SPENT"])
         d4 = json.loads(p4.read_text())
-        case("REGRESSÃO T4: disco não excede o cap", d4["spent_usd"] <= 1.0)
+        case("REGRESSION T4: disk does not exceed the cap", d4["spent_usd"] <= 1.0)
 
         p5 = tmp / "run5" / "cost-ledger.json"
         outs = run_children(p5, cap=10.0, amount=0.3, hold=0.3)
         d5 = json.loads(p5.read_text())
-        case("REGRESSÃO T4: gastos de 2 processos SOMAM (não last-write-wins)",
+        case("REGRESSION T4: 2 processes' spends ADD UP (not last-write-wins)",
              outs == ["SPENT", "SPENT"] and abs(d5["spent_usd"] - 0.6) < 1e-6
              and d5["calls"] == 2)
 
-        # ---- reservas: visibilidade e higiene ----
+        # ---- reservations: visibility and hygiene ----
         pr = tmp / "run6" / "cost-ledger.json"
         a = BudgetLedger(cap_usd=1.0, ledger_path=pr)
         a.reserve(0.8)
         b = BudgetLedger(cap_usd=1.0, ledger_path=pr)
         try:
             b.reserve(0.5)
-            case("reserva em voo de OUTRO processo bloqueia o dispatch", False)
+            case("an in-flight reservation from ANOTHER process blocks dispatch", False)
         except BudgetExceeded:
-            case("reserva em voo de OUTRO processo bloqueia o dispatch", True)
+            case("an in-flight reservation from ANOTHER process blocks dispatch", True)
         a.release(0.8)
         try:
             b.reserve(0.5)
-            case("release devolve o orçamento aos outros processos", True)
+            case("release gives the budget back to the other processes", True)
         except BudgetExceeded:
-            case("release devolve o orçamento aos outros processos", False)
+            case("release gives the budget back to the other processes", False)
 
-        # órfã de processo morto não pode travar o run pra sempre
+        # an orphan from a dead process must not lock the run forever
         po = tmp / "run7" / "cost-ledger.json"
         po.parent.mkdir(parents=True)
         po.write_text(json.dumps({
@@ -434,427 +443,444 @@ def main() -> int:
         o = BudgetLedger(cap_usd=1.0, ledger_path=po)
         try:
             o.reserve(0.5)
-            case("reserva órfã (processo morto) expira pelo TTL", True)
+            case("an orphaned reservation (dead process) expires via the TTL", True)
         except BudgetExceeded:
-            case("reserva órfã (processo morto) expira pelo TTL", False)
+            case("an orphaned reservation (dead process) expires via the TTL", False)
 
-        # ---- fail-closed que já existia: não regredir ----
+        # ---- fail-closed that already existed: do not regress ----
         c._catalog = {"neg/model": {"pricing": {"prompt": "-1", "completion": "-1"}}}
         try:
             c._estimate("neg/model", [{"role": "user", "content": "x"}], 10)
-            case("pricing sentinela -1/-1 segue fail-closed", False)
+            case("sentinel -1/-1 pricing remains fail-closed", False)
         except RuntimeError:
-            case("pricing sentinela -1/-1 segue fail-closed", True)
+            case("sentinel -1/-1 pricing remains fail-closed", True)
 
         led9 = BudgetLedger(cap_usd=10.0, persist=False)
         led9.reserve(1.0)
         led9.reconcile(1.0, -5.0)
-        case("custo REAL negativo não deflaciona o gasto", abs(led9.spent - 1.0) < 1e-9)
+        case("a negative REAL cost does not deflate the spend", abs(led9.spent - 1.0) < 1e-9)
 
-        # ==== #4 do review: o contador de cobranca errava nos DOIS sentidos ====
-        # A regra antiga olhava o CODIGO do erro. O codigo nao sabe o que aconteceu.
+        # ==== review #4: the billing counter was wrong in BOTH directions ====
+        # The old rule looked at the error CODE. The code does not know what happened.
 
-        # G1 — 429 limpo em TODAS as tentativas: o provedor recusou tudo, nada foi
-        # gerado, nada foi cobrado. Antes o caminho de falha cobrava uma estimativa
-        # "por garantia" — inflando o ledger sem um centavo real por tras, o que faz o
-        # motor parar cedo e recusar chamada legitima depois.
-        Handler.mode, Handler.hits = "so_429_sempre", 0
+        # G1 — a clean 429 on ALL attempts: the provider refused everything, nothing
+        # was generated, nothing was billed. The failure path used to charge one
+        # estimate "just in case" — inflating the ledger with no real cent behind it,
+        # which makes the engine stop early and refuse legitimate calls later.
+        Handler.mode, Handler.hits = "only_429_always", 0
         led_g1 = BudgetLedger(cap_usd=50.0, persist=False)
         c_g1 = ORClient(ledger=led_g1, api_key="k", outputs_dir=tmp / "g1")
         c_g1._catalog = {"test/model": {"pricing": {"prompt": "0.001",
                                                     "completion": "0.002"}}}
         try:
-            c_g1.chat("test/model", [{"role": "user", "content": "oi"}], max_tokens=100)
+            c_g1.chat("test/model", [{"role": "user", "content": "hi"}], max_tokens=100)
         except Exception:
             pass
-        case("G1: 429 limpo em todas as tentativas NAO cobra nada",
+        case("G1: a clean 429 on every attempt charges NOTHING",
              abs(led_g1.spent) < 1e-9 and Handler.hits == or_client.MAX_RETRIES)
 
-        # G2 — conteudo e SO ENTAO 429 no corpo: gerou antes de recusar, logo cobrou.
-        # A regra por codigo do erro marcaria como nao-cobravel e subcontaria.
-        Handler.mode, Handler.hits = "conteudo_e_dai_429", 0
+        # G2 — content and ONLY THEN the 429 in the body: it generated before refusing,
+        # hence it billed. The rule by error code would mark it non-chargeable and
+        # undercount.
+        Handler.mode, Handler.hits = "content_then_429", 0
         led_g2 = BudgetLedger(cap_usd=50.0, persist=False)
         c_g2 = ORClient(ledger=led_g2, api_key="k", outputs_dir=tmp / "g2")
         c_g2._catalog = {"test/model": {"pricing": {"prompt": "0.001",
                                                     "completion": "0.002"}}}
-        est_g2 = c_g2._estimate("test/model", [{"role": "user", "content": "oi"}], 100)
+        est_g2 = c_g2._estimate("test/model", [{"role": "user", "content": "hi"}], 100)
         try:
-            c_g2.chat("test/model", [{"role": "user", "content": "oi"}], max_tokens=100)
+            c_g2.chat("test/model", [{"role": "user", "content": "hi"}], max_tokens=100)
         except Exception:
             pass
-        case("G2: conteudo ANTES do 429 no corpo E cobrado (gerou, logo cobrou)",
+        case("G2: content BEFORE the 429 in the body IS charged (it generated, hence billed)",
              abs(led_g2.spent - est_g2 * or_client.MAX_RETRIES) < 1e-9)
 
-        # G3 — stream cortado no meio do JSON: nenhum texto e parseado, mas os BYTES
-        # estavam no fio. Medir pelo parse subcontava exatamente a falha mais comum de
-        # streaming numa chamada longa.
-        Handler.mode, Handler.hits = "corta_no_meio", 0
+        # G3 — a stream cut in the middle of the JSON: no text gets parsed, but the
+        # BYTES were on the wire. Measuring by the parse undercounted exactly the most
+        # common streaming failure in a long call.
+        Handler.mode, Handler.hits = "cut_midstream", 0
         led_g3 = BudgetLedger(cap_usd=50.0, persist=False)
         c_g3 = ORClient(ledger=led_g3, api_key="k", outputs_dir=tmp / "g3")
         c_g3._catalog = {"test/model": {"pricing": {"prompt": "0.001",
                                                     "completion": "0.002"}}}
-        est_g3 = c_g3._estimate("test/model", [{"role": "user", "content": "oi"}], 100)
+        est_g3 = c_g3._estimate("test/model", [{"role": "user", "content": "hi"}], 100)
         try:
-            c_g3.chat("test/model", [{"role": "user", "content": "oi"}], max_tokens=100)
+            c_g3.chat("test/model", [{"role": "user", "content": "hi"}], max_tokens=100)
         except Exception:
             pass
-        case("G3: stream truncado no meio do JSON conta como cobravel (bytes no fio)",
+        case("G3: a stream truncated mid-JSON counts as chargeable (bytes on the wire)",
              led_g3.spent >= est_g3 - 1e-9)
         Handler.mode = "ok"
 
-        # ---- AUDITORIA POR MUTAÇÃO: duas guardas do dinheiro sem teste ----
-        # A1 — `usage.cost` não-finito vindo do provedor. Havia teste para o PRICING do
-        # catálogo não-finito (N3), nenhum para o custo REAL da resposta, que é o outro
-        # jeito de o número envenenado entrar: dali ele vai direto pro ledger.
-        Handler.mode, Handler.hits = "custo_nan", 0
+        # ---- MUTATION AUDIT: two money guards with no test ----
+        # A1 — a non-finite `usage.cost` coming from the provider. There was a test for
+        # non-finite catalog PRICING (N3), none for the REAL cost of the response,
+        # which is the other way the poisoned number gets in: from there it goes
+        # straight to the ledger.
+        Handler.mode, Handler.hits = "cost_nan", 0
         led_cn = BudgetLedger(cap_usd=5.0, persist=False)
-        c_cn = ORClient(ledger=led_cn, api_key="k", outputs_dir=tmp / "custonan")
+        c_cn = ORClient(ledger=led_cn, api_key="k", outputs_dir=tmp / "costnan")
         c_cn._catalog = {"test/model": {"pricing": {"prompt": "0.000001",
                                                     "completion": "0.000002"}}}
-        out_cn = c_cn.chat("test/model", [{"role": "user", "content": "oi"}], max_tokens=10)
-        case("A1: usage.cost não-finito vira a estimativa, não envenena o ledger",
+        out_cn = c_cn.chat("test/model", [{"role": "user", "content": "hi"}], max_tokens=10)
+        case("A1: a non-finite usage.cost becomes the estimate, does not poison the ledger",
              math.isfinite(led_cn.spent) and math.isfinite(out_cn["cost_usd"]))
 
-        # A2 — ledger cujo topo não é objeto JSON (uma lista, por exemplo). Antes disso
-        # levantava AttributeError cru no meio do `_read_disk`, que não é um erro que
-        # alguém saiba interpretar; e o fail-closed só cobria os campos, não o formato.
-        lp_lista = tmp / "topo-lista.json"
-        lp_lista.write_text('[{"spent_usd": 1.0}]')
+        # A2 — a ledger whose top level is not a JSON object (a list, for example).
+        # Before, this raised a raw AttributeError in the middle of `_read_disk`, which
+        # is not an error anyone knows how to interpret; and the fail-closed only
+        # covered the fields, not the shape.
+        lp_list = tmp / "top-list.json"
+        lp_list.write_text('[{"spent_usd": 1.0}]')
         try:
-            BudgetLedger(cap_usd=5.0, persist=True, ledger_path=lp_lista)
-            case("A2: ledger cujo topo não é objeto falha FECHADA (não AttributeError)",
+            BudgetLedger(cap_usd=5.0, persist=True, ledger_path=lp_list)
+            case("A2: a ledger whose top level is not an object fails CLOSED (not AttributeError)",
                  False)
         except LedgerCorrupted:
-            case("A2: ledger cujo topo não é objeto falha FECHADA (não AttributeError)",
+            case("A2: a ledger whose top level is not an object fails CLOSED (not AttributeError)",
                  True)
 
-        # ---- Q8: a allowlist não pode admitir add-on PAGO ----
-        # `plugins` é por onde a OpenRouter liga web search e afins. A taxa do add-on não
-        # entra em `_estimate`, então o chamador reserva só o custo de token e descobre o
-        # resto na fatura — que é exatamente o furo que a allowlist existe pra fechar.
+        # ---- Q8: the allowlist must not admit PAID add-ons ----
+        # `plugins` is how OpenRouter enables web search and the like. The add-on fee
+        # does not enter `_estimate`, so the caller reserves only the token cost and
+        # finds out the rest on the bill — which is exactly the hole the allowlist
+        # exists to close.
         c_pl = ORClient(ledger=BudgetLedger(cap_usd=5.0, persist=False),
                         api_key="k", outputs_dir=tmp / "plug")
         c_pl._catalog = {"test/model": {"pricing": {"prompt": "0.000001",
                                                     "completion": "0.000002"}}}
         try:
-            c_pl.chat("test/model", [{"role": "user", "content": "oi"}],
+            c_pl.chat("test/model", [{"role": "user", "content": "hi"}],
                       extra_body={"plugins": [{"id": "web"}]})
-            case("Q8: extra_body rejeita 'plugins' (add-on pago fora da estimativa)", False)
+            case("Q8: extra_body rejects 'plugins' (paid add-on outside the estimate)", False)
         except ValueError:
-            case("Q8: extra_body rejeita 'plugins' (add-on pago fora da estimativa)", True)
+            case("Q8: extra_body rejects 'plugins' (paid add-on outside the estimate)", True)
         except Exception:
-            case("Q8: extra_body rejeita 'plugins' (add-on pago fora da estimativa)", False)
+            case("Q8: extra_body rejects 'plugins' (paid add-on outside the estimate)", False)
 
-        # ---- Q10: timeout maior que o TTL da reserva é recusado ----
-        # A reserva expira pelo TTL. Se uma tentativa pode durar mais que isso, a reserva
-        # some com a chamada ainda VIVA e outro processo gasta o mesmo orçamento. `timeout`
-        # é parâmetro livre e cells.py encaminha o request da tarefa.
+        # ---- Q10: a timeout larger than the reservation TTL is refused ----
+        # The reservation expires via the TTL. If one attempt can last longer than
+        # that, the reservation vanishes with the call still ALIVE and another process
+        # spends the same budget. `timeout` is a free parameter and cells.py forwards
+        # the task's request.
         try:
-            c_pl.chat("test/model", [{"role": "user", "content": "oi"}],
-                      timeout=or_client.RESERVATION_TTL_S)  # x MAX_RETRIES estoura o TTL
-            case("Q10: timeout que estoura o TTL da reserva é recusado ANTES do dispatch",
+            c_pl.chat("test/model", [{"role": "user", "content": "hi"}],
+                      timeout=or_client.RESERVATION_TTL_S)  # x MAX_RETRIES blows the TTL
+            case("Q10: a timeout that blows the reservation TTL is refused BEFORE dispatch",
                  False)
         except ValueError:
-            case("Q10: timeout que estoura o TTL da reserva é recusado ANTES do dispatch",
+            case("Q10: a timeout that blows the reservation TTL is refused BEFORE dispatch",
                  True)
         except Exception:
-            case("Q10: timeout que estoura o TTL da reserva é recusado ANTES do dispatch",
+            case("Q10: a timeout that blows the reservation TTL is refused BEFORE dispatch",
                  False)
 
-        # ---- Q3: a cobrança do fracasso é UM commit, não dois ----
-        # charge_failure e charge_extra eram duas escritas, cada uma pegando o lock. Entre
-        # elas o disco mostrava gasto MENOR que o real, e outro processo lia esse número e
-        # reservava em cima. Cada escrita era atômica; a CONTA não era.
+        # ---- Q3: the failure charge is ONE commit, not two ----
+        # charge_failure and charge_extra were two writes, each taking the lock.
+        # Between them the disk showed LOWER spend than the real one, and another
+        # process read that number and reserved on top of it. Each write was atomic;
+        # the MATH was not.
         lp_q3 = tmp / "q3.json"
         l_q3 = BudgetLedger(cap_usd=100.0, persist=True, ledger_path=lp_q3)
         l_q3.reserve(1.0)
-        antes_calls = json.loads(lp_q3.read_text())["calls"] if lp_q3.exists() else 0
+        calls_before = json.loads(lp_q3.read_text())["calls"] if lp_q3.exists() else 0
         l_q3.charge_failure(1.0, extra_usd=3.0)
         d_q3 = json.loads(lp_q3.read_text())
-        case("Q3: fracasso + geradas anteriores viram UMA escrita (soma correta)",
-             abs(d_q3["spent_usd"] - 4.0) < 1e-9 and d_q3["calls"] == antes_calls + 1)
+        case("Q3: failure + earlier generations become ONE write (correct sum)",
+             abs(d_q3["spent_usd"] - 4.0) < 1e-9 and d_q3["calls"] == calls_before + 1)
 
-        # ================== NaN: O NÚMERO QUE DESLIGA O TETO ==================
-        # Achado no review adversarial e reproduzido antes de virar teste. `nan > cap` é
-        # False, então TODA comparação de teto vira no-op quando um não-finito entra. E o
-        # `max(0.0, nan)` do clamp devolve 0.0 — um ledger com spent_usd NaN carrega como
-        # gasto ZERO e o run inteiro recupera o orçamento. Pior tipo de bug deste arquivo:
-        # não quebra nada, não loga nada, só desliga a trava.
+        # ================== NaN: THE NUMBER THAT TURNS OFF THE CEILING ==================
+        # Found in the adversarial review and reproduced before becoming a test.
+        # `nan > cap` is False, so EVERY ceiling comparison becomes a no-op once a
+        # non-finite gets in. And the clamp's `max(0.0, nan)` returns 0.0 — a ledger
+        # with a NaN spent_usd loads as ZERO spend and the whole run recovers its
+        # budget. The worst kind of bug in this file: it breaks nothing, logs nothing,
+        # it just turns off the guard.
         nan, inf = float("nan"), float("inf")
 
-        # A invariante NÃO é "levanta" — é que o teto continua existindo. O tratamento
-        # certo é o conservador (vale a reserva), igual ao do custo negativo. Escrevi
-        # este caso esperando exceção e o código estava certo, não o teste.
+        # The invariant is NOT "it raises" — it is that the ceiling keeps existing. The
+        # right treatment is the conservative one (the reservation stands), same as for
+        # the negative cost. I wrote this case expecting an exception and the code was
+        # right, not the test.
         led_nan = BudgetLedger(cap_usd=1.0, persist=False)
         led_nan.reserve(0.5)
-        led_nan.reconcile(0.5, nan)   # custo REAL não-finito vindo do provedor
-        case("N1: custo NaN vira a estimativa (conservador), não NaN",
+        led_nan.reconcile(0.5, nan)   # non-finite REAL cost coming from the provider
+        case("N1: a NaN cost becomes the estimate (conservative), not NaN",
              math.isfinite(led_nan.spent) and abs(led_nan.spent - 0.5) < 1e-9)
-        led_nan.reserve(0.4)          # 0.5 + 0.4 = 0.9 < 1.0, ainda cabe
+        led_nan.reserve(0.4)          # 0.5 + 0.4 = 0.9 < 1.0, still fits
         try:
             led_nan.reserve(0.3)      # 0.9 + 0.3 = 1.2 > 1.0
-            case("N1b: o teto SEGUE valendo depois de um custo NaN", False)
+            case("N1b: the ceiling STILL holds after a NaN cost", False)
         except BudgetExceeded:
-            case("N1b: o teto SEGUE valendo depois de um custo NaN", True)
+            case("N1b: the ceiling STILL holds after a NaN cost", True)
 
-        # NaN no disco: `json.loads` aceita o literal NaN sem reclamar.
-        for texto, desc in [('{"spent_usd": NaN, "calls": 1, "reservations": {}}', "spent NaN"),
-                            ('{"spent_usd": Infinity, "calls": 1, "reservations": {}}',
-                             "spent Infinity"),
-                            ('{"spent_usd": 1.0, "calls": 1, "cap_usd": NaN, '
-                             '"reservations": {}}', "cap NaN"),
-                            ('{"spent_usd": 1.0, "calls": 1, "reservations": '
-                             '{"x": {"usd": NaN, "ts": 1}}}', "reserva NaN")]:
+        # NaN on disk: `json.loads` accepts the NaN literal without complaint.
+        for text, desc in [('{"spent_usd": NaN, "calls": 1, "reservations": {}}', "spent NaN"),
+                           ('{"spent_usd": Infinity, "calls": 1, "reservations": {}}',
+                            "spent Infinity"),
+                           ('{"spent_usd": 1.0, "calls": 1, "cap_usd": NaN, '
+                            '"reservations": {}}', "cap NaN"),
+                           ('{"spent_usd": 1.0, "calls": 1, "reservations": '
+                            '{"x": {"usd": NaN, "ts": 1}}}', "reservation NaN")]:
             lpn = tmp / f"nan-{desc.replace(' ', '-')}.json"
-            lpn.write_text(texto)
+            lpn.write_text(text)
             try:
                 l_ = BudgetLedger(cap_usd=15.0, persist=True, ledger_path=lpn)
-                case(f"N2: ledger com {desc} falha FECHADA (não zera o gasto)",
+                case(f"N2: a ledger with {desc} fails CLOSED (does not zero the spend)",
                      False if desc.startswith("spent") else math.isfinite(l_.spent))
             except LedgerCorrupted:
-                case(f"N2: ledger com {desc} falha FECHADA (não zera o gasto)", True)
+                case(f"N2: a ledger with {desc} fails CLOSED (does not zero the spend)", True)
 
-        # N2b — o `parse_constant` e o `isfinite` parecem redundantes e não são. O
-        # isfinite só olha os campos que eu validei (spent_usd, calls, reservas); o
-        # parse_constant recusa o literal NaN em QUALQUER campo, inclusive um que só
-        # exista no futuro. Sem ele, um NaN entra no dict e espera alguém ler.
-        lp_x = tmp / "nan-campo-desconhecido.json"
+        # N2b — the `parse_constant` and the `isfinite` look redundant and are not. The
+        # isfinite only looks at the fields I validated (spent_usd, calls,
+        # reservations); the parse_constant refuses the NaN literal in ANY field,
+        # including one that only exists in the future. Without it, a NaN enters the
+        # dict and waits for someone to read it.
+        lp_x = tmp / "nan-unknown-field.json"
         lp_x.write_text('{"spent_usd": 1.0, "calls": 1, "reservations": {}, '
-                        '"campo_novo_qualquer": NaN}')
+                        '"some_future_field": NaN}')
         try:
             BudgetLedger(cap_usd=15.0, persist=True, ledger_path=lp_x)
-            case("N2b: NaN em campo NÃO validado ainda é recusado (parse_constant)", False)
+            case("N2b: a NaN in a NOT-yet-validated field is still refused (parse_constant)", False)
         except LedgerCorrupted:
-            case("N2b: NaN em campo NÃO validado ainda é recusado (parse_constant)", True)
+            case("N2b: a NaN in a NOT-yet-validated field is still refused (parse_constant)", True)
 
-        # e o pricing do catálogo, que é a outra porta de entrada de número do provedor
+        # and the catalog pricing, the other entry door for numbers from the provider
         c_nan = ORClient(ledger=BudgetLedger(cap_usd=5.0, persist=False),
                          api_key="k", outputs_dir=tmp / "nanprice")
         c_nan._catalog = {"nan/model": {"pricing": {"prompt": "nan", "completion": "1"}}}
         try:
             c_nan._estimate("nan/model", [{"role": "user", "content": "x"}], 10)
-            case("N3: pricing não-finito no catálogo é fail-closed", False)
+            case("N3: non-finite pricing in the catalog is fail-closed", False)
         except RuntimeError:
-            case("N3: pricing não-finito no catálogo é fail-closed", True)
+            case("N3: non-finite pricing in the catalog is fail-closed", True)
 
-        # ============ CAMINHO DO DINHEIRO: RETRY, COBRANÇA E RESPOSTA PAGA ============
+        # ============ MONEY PATH: RETRY, BILLING, AND THE PAID RESPONSE ============
 
-        # M1 (#3) — 429 no corpo NÃO é geração. `geradas` conta toda `_Retriable`, e o
-        # rate limit entra como _Retriable — mas rate limit é o provedor RECUSANDO: nada
-        # foi gerado e nada foi cobrado lá. Cada falso `geradas` cobra uma ESTIMATIVA
-        # inteira a mais; com 2 recusas o ledger infla o run sem um centavo real.
-        Handler.mode, Handler.hits = "erro_429_no_corpo", 0
+        # M1 (#3) — a 429 in the body is NOT a generation. `generated` counted every
+        # `_Retriable`, and the rate limit comes in as _Retriable — but a rate limit is
+        # the provider REFUSING: nothing was generated and nothing was billed there.
+        # Each false `generated` charges one full ESTIMATE extra; with 2 refusals the
+        # ledger inflates the run with no real cent behind it.
+        Handler.mode, Handler.hits = "error_429_in_body", 0
         led_429 = BudgetLedger(cap_usd=100.0, persist=False)
         c429 = ORClient(ledger=led_429, api_key="k", outputs_dir=tmp / "r429")
         c429._catalog = {"test/model": {"pricing": {"prompt": "0.000001",
                                                     "completion": "0.000002"}}}
-        out429 = c429.chat("test/model", [{"role": "user", "content": "oi"}],
+        out429 = c429.chat("test/model", [{"role": "user", "content": "hi"}],
                            max_tokens=10)
-        case("M1: 429 no corpo do stream não conta como geração cobrada",
+        case("M1: a 429 in the stream body does not count as a billed generation",
              abs(led_429.spent - out429["cost_usd"]) < 1e-9)
 
-        # M2 (#4) — no caminho de FALHA, o que já foi gerado tem de ser cobrado.
-        # `charge_extra` só é alcançado no caminho de SUCESSO: se o retry esgota, o
-        # `geradas` morre dentro da exceção (vira texto na mensagem) e o ledger cobra só
-        # uma estimativa, quando o provedor gerou e cobrou MAX_RETRIES vezes. É a
-        # subcontagem que o charge_extra existe pra impedir, no ramo onde ela é maior.
-        Handler.mode, Handler.hits = "sem_done", 0
+        # M2 (#4) — on the FAILURE path, what was already generated has to be charged.
+        # `charge_extra` is only reached on the SUCCESS path: if the retry runs out,
+        # `generated` dies inside the exception (becomes text in the message) and the
+        # ledger charges only one estimate, when the provider generated and billed
+        # MAX_RETRIES times. It is the undercount charge_extra exists to prevent, in
+        # the branch where it is largest.
+        Handler.mode, Handler.hits = "no_done", 0
         led_f = BudgetLedger(cap_usd=100.0, persist=False)
-        cf = ORClient(ledger=led_f, api_key="k", outputs_dir=tmp / "falha")
+        cf = ORClient(ledger=led_f, api_key="k", outputs_dir=tmp / "failure")
         cf._catalog = {"test/model": {"pricing": {"prompt": "0.000001",
                                                   "completion": "0.000002"}}}
-        est_f = cf._estimate("test/model", [{"role": "user", "content": "oi"}], 10)
+        est_f = cf._estimate("test/model", [{"role": "user", "content": "hi"}], 10)
         try:
-            cf.chat("test/model", [{"role": "user", "content": "oi"}], max_tokens=10)
+            cf.chat("test/model", [{"role": "user", "content": "hi"}], max_tokens=10)
         except Exception:
             pass
-        # IGUALDADE, não `>=`. O `>=` que eu tinha escrito aqui deixava passar o
-        # resultado ERRADO: com charge_failure + charge_extra somando est*(geradas+1),
-        # o total era 5 estimativas para 4 tentativas e o teste passava feliz. Um teste
-        # de cobrança que aceita "pelo menos X" não testa cobrança — testa que houve.
-        case("M2: retry esgotado cobra EXATAMENTE uma estimativa por geração",
+        # EQUALITY, not `>=`. The `>=` I had written here let the WRONG result pass:
+        # with charge_failure + charge_extra adding est*(generated+1), the total was 5
+        # estimates for 4 attempts and the test passed happily. A billing test that
+        # accepts "at least X" does not test billing — it tests that some happened.
+        case("M2: an exhausted retry charges EXACTLY one estimate per generation",
              abs(led_f.spent - est_f * or_client.MAX_RETRIES) < 1e-9)
 
-        # M3 (#5) — resposta JÁ PAGA não pode sumir quando o cap estoura. O
-        # `reconcile` levanta BudgetExceeded depois de a chamada ter sido cobrada; se a
-        # exceção sobe pelada, o texto pago vai pro lixo e o run reprocessa (e paga) de
-        # novo. O dinheiro já saiu: quem chamou tem de conseguir salvar o resultado.
+        # M3 (#5) — an ALREADY-PAID response must not vanish when the cap blows. The
+        # `reconcile` raises BudgetExceeded after the call has been billed; if the
+        # exception bubbles up bare, the paid text goes in the trash and the run
+        # reprocesses (and pays) again. The money is already gone: the caller must be
+        # able to save the result.
         Handler.mode, Handler.hits = "ok", 0
-        led_c = BudgetLedger(cap_usd=0.2, persist=False)  # menor que o custo (0.5)
-        cc = ORClient(ledger=led_c, api_key="k", outputs_dir=tmp / "capestoura")
+        led_c = BudgetLedger(cap_usd=0.2, persist=False)  # lower than the cost (0.5)
+        cc = ORClient(ledger=led_c, api_key="k", outputs_dir=tmp / "capblown")
         cc._catalog = {"test/model": {"pricing": {"prompt": "0.000001",
                                                   "completion": "0.000002"}}}
         try:
-            cc.chat("test/model", [{"role": "user", "content": "oi"}], max_tokens=10)
-            case("M3: cap estourado no reconcile levanta BudgetExceeded", False)
+            cc.chat("test/model", [{"role": "user", "content": "hi"}], max_tokens=10)
+            case("M3: a cap blown in reconcile raises BudgetExceeded", False)
         except BudgetExceeded as e:
-            case("M3: cap estourado no reconcile levanta BudgetExceeded", True)
-            case("M3: a resposta JÁ PAGA viaja na exceção (não é jogada fora)",
-                 getattr(e, "resposta", None) is not None
-                 and e.resposta.get("text") == "oi mundo")
+            case("M3: a cap blown in reconcile raises BudgetExceeded", True)
+            # `response` is the attribute's cross-file API name (read by cells.py too)
+            case("M3: the ALREADY-PAID response travels in the exception (not thrown away)",
+                 getattr(e, "response", None) is not None
+                 and e.response.get("text") == "hi world")
 
-        # M4 (#9) — ler `.text` de um 429 não pode transformar retriável em terminal.
-        # Com stream=True o corpo ainda está aberto; se a leitura estourar o prazo, a
-        # exceção sobe de dentro do ramo do 429 e o retry NUNCA acontece. O motor
-        # desiste de uma chamada que o provedor mandou repetir.
-        class _RespVenenosa:
+        # M4 (#9) — reading a 429's `.text` must not turn retriable into terminal.
+        # With stream=True the body is still open; if the read blows the deadline, the
+        # exception rises from inside the 429 branch and the retry NEVER happens. The
+        # engine gives up on a call the provider told it to repeat.
+        class _PoisonedResp:
             status_code = 429
             headers = {"Retry-After": "0"}
 
             @property
             def text(self):
-                raise DeadlineExceeded("prazo estourou lendo o corpo do 429")
+                raise DeadlineExceeded("deadline blew while reading the 429 body")
 
             def close(self):
                 pass
 
-        class _SessaoVenenosa:
+        class _PoisonedSession:
             def __init__(self):
                 self.posts = 0
 
             def post(self, *a, **kw):
                 self.posts += 1
-                return _RespVenenosa()
+                return _PoisonedResp()
 
-        sv = _SessaoVenenosa()
+        sv = _PoisonedSession()
         led_v = BudgetLedger(cap_usd=100.0, persist=False)
-        cv = ORClient(ledger=led_v, api_key="k", session=sv, outputs_dir=tmp / "venen")
+        cv = ORClient(ledger=led_v, api_key="k", session=sv, outputs_dir=tmp / "poison")
         cv._catalog = {"test/model": {"pricing": {"prompt": "0.000001",
                                                   "completion": "0.000002"}}}
         try:
-            cv.chat("test/model", [{"role": "user", "content": "oi"}], max_tokens=10)
+            cv.chat("test/model", [{"role": "user", "content": "hi"}], max_tokens=10)
         except Exception:
             pass
-        case("M4: 429 cujo corpo não pode ser lido ainda assim é RE-TENTADO",
+        case("M4: a 429 whose body cannot be read is still RETRIED",
              sv.posts == or_client.MAX_RETRIES)
 
-        # ================== LOTE QUE FOI ANUNCIADO E NUNCA APLICADO ==================
-        # Três correções que eu reportei como feitas e não estavam no arquivo: o script
-        # que as aplicaria abortou no primeiro assert e o write nunca rodou. Estas são as
-        # red tests que deveriam ter existido na primeira vez — um teste teria denunciado
-        # o anúncio falso na hora.
+        # ================== THE BATCH THAT WAS ANNOUNCED AND NEVER APPLIED ==================
+        # Three fixes I reported as done that were not in the file: the script that
+        # would apply them aborted on the first assert and the write never ran. These
+        # are the red tests that should have existed the first time — a test would have
+        # exposed the false announcement on the spot.
 
-        # ---- L1: o ledger NÃO fica cravado no menor teto que já passou por ele ----
-        # Eu tinha implementado `min(cap desta instância, cap no disco)` e persistido o
-        # menor. Isso criava um ledger envenenado: um typo de $0.50 num run barrava um run
-        # legítimo de $50 depois, e a única saída era apagar o arquivo — que apaga o
-        # histórico de gasto junto. O cap é política de quem está rodando AGORA; o gasto é
-        # que é estado do run.
-        lp = tmp / "cap-efetivo.json"
-        baixo = BudgetLedger(cap_usd=5.0, persist=True, ledger_path=lp)
-        baixo.reserve(1.0)
-        baixo.reconcile(1.0, 1.0)
-        alto = BudgetLedger(cap_usd=50.0, persist=True, ledger_path=lp)
+        # ---- L1: the ledger does NOT get pinned to the lowest ceiling that ever passed through it ----
+        # I had implemented `min(this instance's cap, cap on disk)` and persisted the
+        # lower one. That created a poisoned ledger: a $0.50 typo in one run blocked a
+        # legitimate $50 run later, and the only way out was deleting the file — which
+        # deletes the spend history with it. The cap is the policy of whoever is
+        # running NOW; the spend is what is run state.
+        lp = tmp / "effective-cap.json"
+        low = BudgetLedger(cap_usd=5.0, persist=True, ledger_path=lp)
+        low.reserve(1.0)
+        low.reconcile(1.0, 1.0)
+        high = BudgetLedger(cap_usd=50.0, persist=True, ledger_path=lp)
         try:
-            alto.reserve(10.0)   # 1 gasto + 10 = 11, abaixo do teto DESTA instância (50)
-            case("L1: cap de uma instância anterior não vira teto permanente do arquivo",
+            high.reserve(10.0)   # 1 spent + 10 = 11, below THIS instance's ceiling (50)
+            case("L1: an earlier instance's cap does not become the file's permanent ceiling",
                  True)
         except BudgetExceeded:
-            case("L1: cap de uma instância anterior não vira teto permanente do arquivo",
+            case("L1: an earlier instance's cap does not become the file's permanent ceiling",
                  False)
-        alto.release(10.0)
+        high.release(10.0)
 
-        # L1c: o reconcile interrompe pelo teto DESTA instância contra o gasto
-        # acumulado do run. É o ponto onde o custo REAL (que pode passar da estimativa)
-        # para o run — e ele tem de olhar o total do arquivo, não só o que este processo
-        # gastou, senão duas instâncias furam o teto juntas.
+        # L1c: the reconcile interrupts at THIS instance's ceiling against the run's
+        # accumulated spend. It is the point where the REAL cost (which can exceed the
+        # estimate) stops the run — and it has to look at the file's total, not just
+        # what this process spent, otherwise two instances breach the ceiling together.
         lp_r = tmp / "cap-reconcile.json"
         r1 = BudgetLedger(cap_usd=5.0, persist=True, ledger_path=lp_r)
-        r1.reserve(3.0); r1.reconcile(3.0, 3.0)          # run já tem 3 gastos
+        r1.reserve(3.0); r1.reconcile(3.0, 3.0)          # the run already has 3 spent
         r2 = BudgetLedger(cap_usd=5.0, persist=True, ledger_path=lp_r)
         r2.reserve(1.0)
         try:
             r2.reconcile(1.0, 2.5)   # real 2.5; total 3 + 2.5 = 5.5 > 5
-            case("L1c: reconcile para pelo gasto ACUMULADO do run, não só pelo local",
+            case("L1c: reconcile stops at the run's ACCUMULATED spend, not just the local one",
                  False)
         except BudgetExceeded:
-            case("L1c: reconcile para pelo gasto ACUMULADO do run, não só pelo local",
+            case("L1c: reconcile stops at the run's ACCUMULATED spend, not just the local one",
                  True)
 
-        # ---- L2: ledger que PARSEIA mas tem lixo tipado é corrupção, não run novo ----
-        # O fail-closed só cobria JSON ilegível. `{"spent_usd": "muito"}` e
-        # `{"spent_usd": null}` parseiam, caem no `except (TypeError, ValueError)` /
-        # no `or 0.0`, viram 0.0 em silêncio — e devolvem o cap INTEIRO. É o mesmo
-        # fail-open que o LedgerCorrupted existe para fechar, entrando pela outra porta.
-        for lixo, desc in [('{"spent_usd": "muito", "calls": 1}', "string"),
+        # ---- L2: a ledger that PARSES but holds typed junk is corruption, not a new run ----
+        # The fail-closed only covered unreadable JSON. `{"spent_usd": "a lot"}` and
+        # `{"spent_usd": null}` parse, fall into the `except (TypeError, ValueError)` /
+        # the `or 0.0`, silently become 0.0 — and give back the WHOLE cap. It is the
+        # same fail-open that LedgerCorrupted exists to close, coming in through the
+        # other door.
+        for junk, desc in [('{"spent_usd": "a lot", "calls": 1}', "string"),
                            ('{"spent_usd": null, "calls": 1}', "null"),
-                           ('{"spent_usd": [1,2], "calls": 1}', "lista"),
+                           ('{"spent_usd": [1,2], "calls": 1}', "list"),
                            ('{"spent_usd": true, "calls": 1}', "bool"),
-                           ('{"spent_usd": 1.0, "calls": "dois"}', "calls string")]:
-            lp2 = tmp / f"lixo-{desc.replace(' ', '-')}.json"
-            lp2.write_text(lixo)
+                           ('{"spent_usd": 1.0, "calls": "two"}', "calls string")]:
+            lp2 = tmp / f"junk-{desc.replace(' ', '-')}.json"
+            lp2.write_text(junk)
             try:
                 BudgetLedger(cap_usd=5.0, persist=True, ledger_path=lp2)
-                case(f"L2: ledger com {desc} no lugar do número falha FECHADA", False)
+                case(f"L2: a ledger with {desc} in place of the number fails CLOSED", False)
             except LedgerCorrupted:
-                case(f"L2: ledger com {desc} no lugar do número falha FECHADA", True)
-        # L2c: reserva MALFORMADA é corrupção; reserva VENCIDA é órfã. A diferença
-        # importa porque descartar uma reserva devolve o orçamento dela ao cap — some
-        # dinheiro em voo da conta. Também achado por mutação: neutralizar a checagem
-        # não derrubava nada, porque todo teste de reserva usava entrada bem-formada.
-        for lixo, desc in [('{"spent_usd": 1.0, "reservations": {"x": "nao-e-dict"}}',
-                            "reserva que não é objeto"),
+                case(f"L2: a ledger with {desc} in place of the number fails CLOSED", True)
+        # L2c: a MALFORMED reservation is corruption; an EXPIRED one is an orphan. The
+        # difference matters because discarding a reservation gives its budget back to
+        # the cap — in-flight money vanishes from the books. Also found by mutation:
+        # neutralizing the check knocked nothing over, because every reservation test
+        # used well-formed input.
+        for junk, desc in [('{"spent_usd": 1.0, "reservations": {"x": "not-a-dict"}}',
+                            "reservation that is not an object"),
                            ('{"spent_usd": 1.0, "reservations": {"x": {"usd": 2.0}}}',
-                            "reserva sem ts"),
+                            "reservation without ts"),
                            ('{"spent_usd": 1.0, "reservations": {"x": {"usd": "abc", "ts": 1}}}',
-                            "reserva com usd ilegível"),
-                           ('{"spent_usd": 1.0, "reservations": "nao-e-objeto"}',
-                            "reservations que não é objeto")]:
+                            "reservation with unreadable usd"),
+                           ('{"spent_usd": 1.0, "reservations": "not-an-object"}',
+                            "reservations that is not an object")]:
             lpr = tmp / f"res-{desc.replace(' ', '-')}.json"
-            lpr.write_text(lixo)
+            lpr.write_text(junk)
             try:
                 BudgetLedger(cap_usd=5.0, persist=True, ledger_path=lpr)
-                case(f"L2c: {desc} falha FECHADA (não devolve orçamento ao cap)", False)
+                case(f"L2c: {desc} fails CLOSED (does not give the budget back to the cap)", False)
             except LedgerCorrupted:
-                case(f"L2c: {desc} falha FECHADA (não devolve orçamento ao cap)", True)
+                case(f"L2c: {desc} fails CLOSED (does not give the budget back to the cap)", True)
 
-        # L2d — `reservations: null` era convertido para {} DE PROPÓSITO por mim, e isso
-        # é fail-open: reserva em voo de outro processo é justamente o que impede dois
-        # runs de gastarem o mesmo dinheiro. Apagá-las devolve tudo ao cap.
+        # L2d — `reservations: null` used to be converted to {} ON PURPOSE by me, and
+        # that is fail-open: another process's in-flight reservation is precisely what
+        # keeps two runs from spending the same money. Erasing them gives everything
+        # back to the cap.
         for txt, d in [('{"spent_usd":1.0,"calls":1,"reservations":null}', "reservations null"),
-                       ('{"spent_usd":1.0,"calls":2.7,"reservations":{}}', "calls fracionario"),
+                       ('{"spent_usd":1.0,"calls":2.7,"reservations":{}}', "fractional calls"),
                        ('{"spent_usd":1.0,"calls":1,"reservations":{"x":{"usd":"2.0","ts":1}}}',
-                        "usd como string")]:
+                        "usd as string")]:
             f_ = tmp / f"l2d-{d.replace(' ', '-')}.json"
             f_.write_text(txt)
             try:
                 BudgetLedger(cap_usd=15.0, persist=True, ledger_path=f_)
-                case(f"L2d: {d} falha FECHADA", False)
+                case(f"L2d: {d} fails CLOSED", False)
             except LedgerCorrupted:
-                case(f"L2d: {d} falha FECHADA", True)
+                case(f"L2d: {d} fails CLOSED", True)
 
-        # e o caso legítimo continua legítimo: ausente/vazio = run novo
-        lp3 = tmp / "novo.json"
+        # and the legitimate case stays legitimate: absent/empty = new run
+        lp3 = tmp / "new.json"
         try:
-            led_novo = BudgetLedger(cap_usd=5.0, persist=True, ledger_path=lp3)
-            case("L2: ledger ausente segue sendo run novo (não é corrupção)",
-                 led_novo.spent == 0.0)
+            led_new = BudgetLedger(cap_usd=5.0, persist=True, ledger_path=lp3)
+            case("L2: an absent ledger is still a new run (not corruption)",
+                 led_new.spent == 0.0)
         except LedgerCorrupted:
-            case("L2: ledger ausente segue sendo run novo (não é corrupção)", False)
+            case("L2: an absent ledger is still a new run (not corruption)", False)
 
-        # ---- L3: extra_body por ALLOWLIST, não denylist de 5 chaves ----
-        # A denylist barrava model/messages/max_tokens/stream/usage e deixava passar
-        # `models` (lista de fallback — TROCA qual modelo cobra), `provider` (rota e
-        # preço), `route`, e `n` (multiplica a geração e a fatura). Todos entram no
-        # payload DEPOIS da estimativa que reservou o orçamento, então o cap é furado por
-        # fator arbitrário sem erro nenhum. cells.py encaminha `request` vindo da tarefa:
-        # é alcançável por dado comum, não só por malícia.
+        # ---- L3: extra_body via ALLOWLIST, not a 5-key denylist ----
+        # The denylist blocked model/messages/max_tokens/stream/usage and let through
+        # `models` (fallback list — CHANGES which model bills), `provider` (route and
+        # price), `route`, and `n` (multiplies the generation and the bill). All enter
+        # the payload AFTER the estimate that reserved the budget, so the cap is
+        # breached by an arbitrary factor with no error at all. cells.py forwards a
+        # `request` coming from the task: it is reachable via ordinary data, not just
+        # malice.
         c_ab = ORClient(ledger=BudgetLedger(cap_usd=5.0, persist=False),
                         api_key="k", outputs_dir=tmp / "ab")
-        for chave, valor in [("models", ["openai/gpt-5.6"]), ("provider", {"order": ["x"]}),
-                             ("route", "fallback"), ("n", 4),
-                             ("max_completion_tokens", 99999)]:
+        for key, value in [("models", ["openai/gpt-5.6"]), ("provider", {"order": ["x"]}),
+                           ("route", "fallback"), ("n", 4),
+                           ("max_completion_tokens", 99999)]:
             try:
-                c_ab.chat("z/m", [{"role": "user", "content": "oi"}],
-                          extra_body={chave: valor})
-                case(f"L3: extra_body rejeita {chave!r} (troca modelo/rota/volume)", False)
+                c_ab.chat("z/m", [{"role": "user", "content": "hi"}],
+                          extra_body={key: value})
+                case(f"L3: extra_body rejects {key!r} (swaps model/route/volume)", False)
             except ValueError:
-                case(f"L3: extra_body rejeita {chave!r} (troca modelo/rota/volume)", True)
+                case(f"L3: extra_body rejects {key!r} (swaps model/route/volume)", True)
             except Exception:
-                # qualquer outra exceção significa que passou da validação
-                case(f"L3: extra_body rejeita {chave!r} (troca modelo/rota/volume)", False)
+                # any other exception means it got past the validation
+                case(f"L3: extra_body rejects {key!r} (swaps model/route/volume)", False)
 
-        print(f"{sum(results)}/{len(results)} testes ok")
+        print(f"{sum(results)}/{len(results)} tests ok")
         return 0 if all(results) else 1
     finally:
         srv.shutdown()

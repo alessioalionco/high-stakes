@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
-"""qverify.py — verificação de quote por CÓDIGO (contrato do resumo sem perda, §3f item 6).
+"""qverify.py — quote verification by CODE (lossless-summary contract, §3f item 6).
 
-Toda quote atribuída do dossiê ("> ... — **Nome** (via Modelo)") e toda epígrafe de §4
-(*"..."*) devem ser trecho VERBATIM de uma célula crua daquele conselheiro. Este verificador
-confere por código — mata uma classe de erro medida (5% de fabricação em células com
-pack) e aposenta o flag global `quote_unverified`.
+Every attributed quote in the dossier ("> ... — **Name** (via Model)") and every §4 epigraph
+(*"..."*) must be a VERBATIM excerpt from a raw cell of that advisor. This verifier
+checks by code — it kills a measured error class (5% fabrication in cells with
+a pack) and retires the global `quote_unverified` flag.
 
-Uso: python3 qverify.py <report.md> <cells_dir>   → exit 0 = todas verificadas; 1 = falhas.
-API: verify(report_md, cells_dir) -> list[dict] (um por quote: {quote, advisor, status, onde}).
+Usage: python3 qverify.py <report.md> <cells_dir>   → exit 0 = all verified; 1 = failures.
+API: verify(report_md, cells_dir) -> list[dict] (one per quote: {quote, advisor, status, where}).
 
-Regras de match (endurecidas no review de 21/Jul — 6 rotas de falso-verde fechadas):
-- normalização (minúsculas, espaço colapsado, aspas/travessões/ênfase-markdown unificados);
-- campos da célula separados por \\n APÓS normalizar — quote não pode "colar" fim de um campo
-  com começo de outro;
-- match dentro de UMA célula só, e com segmentos EM ORDEM (elipse "…"/"[...]" divide em
-  segmentos; todos obrigatórios, inclusive os curtos; nada de splice entre células);
-- atribuição = "— **Nome**" ancorada no FIM da linha (travessão+bold no meio da quote é
-  conteúdo, não atribuição);
-- §4: epígrafe ausente/inextraível = FALHA (nunca skip silencioso);
-- match no conselheiro errado = `atribuicao_divergente` (a voz importa tanto quanto o texto).
+Match rules (hardened in the 21/Jul review — 6 false-green routes closed):
+- normalization (lowercase, collapsed whitespace, unified quotes/dashes/markdown emphasis);
+- cell fields separated by \\n AFTER normalizing — a quote cannot "glue" the end of one
+  field to the start of another;
+- match within ONE cell only, and with segments IN ORDER (ellipsis "…"/"[...]" splits into
+  segments; all mandatory, including the short ones; no splicing across cells);
+- attribution = "— **Name**" anchored at the END of the line (em-dash+bold mid-quote is
+  content, not attribution);
+- §4: missing/unextractable epigraph = FAILURE (never a silent skip);
+- match on the wrong advisor = `divergent_attribution` (the voice matters as much as the text).
 """
 from __future__ import annotations
 
@@ -29,50 +29,51 @@ import unicodedata
 from typing import Iterable
 from pathlib import Path
 
-# Nome exibido -> advisor key. PAPÉIS primeiro: "Anti-tese do The Unit Economist" resolve pro papel,
-# não pro nome que aparece dentro do heading.
-# PAPÉIS: resolvem antes do nome ("Anti-tese do The Unit Economist" é o papel, não o The Unit Economist).
+# Display name -> advisor key. ROLES first: "Anti-thesis of The Unit Economist" resolves to the role,
+# not to the name that appears inside the heading.
+# ROLES: resolve before the name ("Anti-thesis of The Unit Economist" is the role, not The Unit Economist).
 ROLE_KEYS = [
-    ("anti-tese", "antitese"), ("antítese", "antitese"), ("antitese", "antitese"),
-    ("refutador", "refuter"), ("generalista", "generalista"),
+    ("anti-thesis", "antithesis"), ("antithesis", "antithesis"),
+    ("refuter", "refuter"), ("generalist", "generalist"),
 ]
-# NÃO existe lista fixa de conselheiros. Havia uma, com 7 sobrenomes, enquanto o pool
-# embarcado tem 13 e o usuário pode escrever os dele: qualquer lente fora da lista
-# resolvia para None e TODA quote dela virava "atribuicao_divergente" — vermelho
-# permanente num gate que deveria ser silencioso. As chaves vêm do corpus das células.
+# There is NO fixed advisor list. There used to be one, with 7 surnames, while the
+# embedded pool has 13 and the user can write their own: any lens outside the list
+# resolved to None and EVERY quote of theirs became "divergent_attribution" — permanent
+# red in a gate that should be silent. The keys come from the cell corpus.
 
-# Atribuição SÓ no fim da linha (com "(via ...)" opcional depois do nome).
+# Attribution ONLY at end of line (with optional "(via ...)" after the name).
 ATTRIB_END_RE = re.compile(
-    r"—\s*\*\*([^*]+?)\*\*\s*(?:\((?:via|lente simulada)[^)]*\))?\s*$")
+    r"—\s*\*\*([^*]+?)\*\*\s*(?:\((?:via|simulated lens)[^)]*\))?\s*$")
 ELLIPSIS_RE = re.compile(r"…|\[\.\.\.\]|\[…\]|\.\.\.")
-MIN_QUOTE = 15   # quote/epígrafe menor que isso não discrimina -> falha explícita
-MIN_SEGMENT = 4  # segmento de elipse mínimo APÓS strip; todos são obrigatórios
+MIN_QUOTE = 15   # a quote/epigraph shorter than this does not discriminate -> explicit failure
+MIN_SEGMENT = 4  # minimum ellipsis segment AFTER strip; all are mandatory
 
 
 def normalize(s: str) -> str:
     s = unicodedata.normalize("NFKC", s)
     s = s.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
     s = s.replace("–", "-").replace("—", "-")
-    s = re.sub(r"[*_`]", "", s)  # ênfase markdown não é conteúdo
+    s = re.sub(r"[*_`]", "", s)  # markdown emphasis is not content
     s = re.sub(r"[ \t]+", " ", s).strip().lower()
     return s.strip(' "\'.,;:!?-')
 
 
 def cell_corpus(cells_dir: Path) -> dict[str, list[str]]:
-    """advisor_key -> [texto normalizado POR CÉLULA] (campos separados por \\n — não colam)."""
+    """advisor_key -> [normalized text PER CELL] (fields separated by \\n — no gluing)."""
     corpus: dict[str, list[str]] = {}
     for p in sorted(cells_dir.glob("*.json")):
         try:
             d = json.loads(p.read_text())
         except json.JSONDecodeError:
             continue
-        # O PAPEL decide só a chave. O corpus se monta igual pra todo mundo: coleta
-        # RECURSIVA de toda string — schema-agnóstico (bug real do 2º uso: lista fixa de
-        # campos deixava schema novo fora do corpus e reprovava quote legítima). O
-        # refutador tinha um ramo próprio lendo o campo plano `text`, que as células do
-        # xverify (schema `result.caso_contra`…) não têm -> corpus vazio -> falso VERMELHO.
+        # The ROLE decides only the key. The corpus is built the same way for everyone:
+        # RECURSIVE collection of every string — schema-agnostic (real bug from the 2nd
+        # use: a fixed field list left a new schema out of the corpus and failed a
+        # legitimate quote). The refuter had its own branch reading the flat `text` field,
+        # which the xverify cells (schema `result.case_against`…) don't have -> empty
+        # corpus -> false RED.
         key = "refuter" if p.name.startswith("refuter") else (
-            d.get("advisor") or d.get("lente") or p.stem)
+            d.get("advisor") or d.get("lente") or p.stem)  # "lente" = legacy PT cell key
         parts: list[str] = []
 
         def walk(x):
@@ -86,7 +87,7 @@ def cell_corpus(cells_dir: Path) -> dict[str, list[str]]:
                     walk(v)
 
         walk(d.get("result") or {})
-        for flat in ("text", "raw_text"):  # formatos antigos de célula
+        for flat in ("text", "raw_text"):  # legacy cell formats
             if d.get(flat):
                 parts.append(str(d[flat]))
         cell_text = "\n".join(normalize(str(x)) for x in parts if str(x).strip())
@@ -94,40 +95,41 @@ def cell_corpus(cells_dir: Path) -> dict[str, list[str]]:
     return corpus
 
 
-def _linhas_de_quote(report_md: str):
-    """Itera (é_quote, corpo) por linha, resolvendo as duas formas de blockquote que o
-    `startswith(">")` cru não enxergava e que davam VERMELHO em documento correto:
+def _quote_lines(report_md: str):
+    """Iterates (is_quote, body) per line, resolving the two blockquote forms that a raw
+    `startswith(">")` did not see and that produced RED on a correct document:
 
-      · indentação de até 3 espaços (markdown válido; 4+ já é bloco de código);
-      · continuação lazy (CommonMark): dentro de um blockquote, linha não-vazia sem `>`
-        continua a citação. Sem isto a quote era partida e o pedaço virava
-        `curta_nao_verificavel`.
+      · indentation of up to 3 spaces (valid markdown; 4+ is already a code block);
+      · lazy continuation (CommonMark): inside a blockquote, a non-empty line without `>`
+        continues the quote. Without this the quote was split and the piece became
+        `too_short_to_verify`.
 
-    Mora aqui, e não duplicado, porque `_joined_quotes` e `_malformed_attributions`
-    precisam concordar sobre o que é blockquote — se divergirem, uma quote é extraída por
-    um e considerada prosa pelo outro, e o relatório se contradiz.
+    It lives here, and is not duplicated, because `_joined_quotes` and
+    `_malformed_attributions` must agree on what a blockquote is — if they diverge, a
+    quote is extracted by one and treated as prose by the other, and the report
+    contradicts itself.
     """
-    dentro = False
+    inside = False
     for ln in report_md.splitlines():
-        despido = re.sub(r"^ {0,3}", "", ln)  # até 3 espaços; 4+ é bloco de código
-        eh_quote = despido.startswith(">")
-        if not eh_quote and dentro and ln.strip():
-            eh_quote, despido = True, "> " + ln.strip()
-        if eh_quote:
-            dentro = True
-            yield True, despido.lstrip("> ").rstrip()
+        stripped = re.sub(r"^ {0,3}", "", ln)  # up to 3 spaces; 4+ is a code block
+        is_quote = stripped.startswith(">")
+        if not is_quote and inside and ln.strip():
+            is_quote, stripped = True, "> " + ln.strip()
+        if is_quote:
+            inside = True
+            yield True, stripped.lstrip("> ").rstrip()
         else:
-            dentro = False
+            inside = False
             yield False, ln
 
 
 def _joined_quotes(report_md: str) -> list[tuple[str, str]]:
-    """[(texto_da_quote, nome_atribuído)] — junta blockquote multi-linha; atribuição só no
-    fim de linha (travessão+bold interno é conteúdo)."""
+    """[(quote_text, attributed_name)] — joins multi-line blockquotes; attribution only at
+    the end of a line (internal em-dash+bold is content)."""
     out = []
     buf: list[str] = []
-    for eh_quote, body in _linhas_de_quote(report_md):
-        if not eh_quote:
+    for is_quote, body in _quote_lines(report_md):
+        if not is_quote:
             buf = []
             continue
         m = ATTRIB_END_RE.search(body)
@@ -140,23 +142,23 @@ def _joined_quotes(report_md: str) -> list[tuple[str, str]]:
     return out
 
 
-def _sem_acento(s: str) -> str:
+def _strip_accents(s: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFD", s)
                    if unicodedata.category(c) != "Mn")
 
 
 def _advisor_for(name: str, corpus_keys: Iterable[str] = ()) -> str | None:
-    """Nome exibido -> chave de conselheiro. Papéis primeiro, depois as chaves REAIS
-    das células daquele run (ordenadas da mais longa para a mais curta, para que
-    'unit economist-antitese' não case antes com 'unit economist')."""
+    """Display name -> advisor key. Roles first, then the REAL keys from that run's
+    cells (sorted longest to shortest, so that 'unit economist-antithesis' does not match
+    'unit economist' first)."""
     n = normalize(name)
-    ns = _sem_acento(n)
+    ns = _strip_accents(n)
     for token, key in ROLE_KEYS:
         if token in n or token in ns:
             return key
     for key in sorted(corpus_keys, key=len, reverse=True):
         k = normalize(str(key))
-        if k and (k in n or _sem_acento(k) in ns):
+        if k and (k in n or _strip_accents(k) in ns):
             return key
     return None
 
@@ -167,7 +169,7 @@ def _segments(qnorm: str) -> list[str]:
 
 
 def _in_one_cell_ordered(segs: list[str], cells: list[str]) -> bool:
-    """Todos os segmentos, EM ORDEM, dentro de UMA MESMA célula."""
+    """All segments, IN ORDER, within ONE SINGLE cell."""
     for text in cells:
         pos = 0
         for s in segs:
@@ -183,140 +185,143 @@ def _in_one_cell_ordered(segs: list[str], cells: list[str]) -> bool:
 def _match(qnorm: str, corpus: dict[str, list[str]], advisor: str | None) -> tuple[str, str]:
     segs = _segments(qnorm)
     if not segs:
-        return "curta_nao_verificavel", ""
+        return "too_short_to_verify", ""
     if advisor and advisor in corpus and _in_one_cell_ordered(segs, corpus[advisor]):
         return "verified", advisor
     for key, cells in corpus.items():
         if key != advisor and _in_one_cell_ordered(segs, cells):
-            return "atribuicao_divergente", key
+            return "divergent_attribution", key
     return "unverified", ""
 
 
-# Detecção FROUXA — a mesma forma que o gate de render usa para contar quotes. Serve para
-# achar linhas que SÃO atribuição; o parse estrito vem depois. Sem isto, uma linha com
-# qualquer texto após o parêntese passava no gate e era INVISÍVEL aqui: o verificador
-# imprimia "VERDE — 0/0" sem ter verificado nada. Gate anti-fabricação falhando ABERTO.
+# LOOSE detection — the same shape the render gate uses to count quotes. It serves to
+# find lines that ARE attributions; strict parsing comes later. Without this, a line with
+# any text after the parenthesis passed the gate and was INVISIBLE here: the verifier
+# printed "GREEN — 0/0" without having verified anything. An anti-fabrication gate
+# failing OPEN.
 ATTRIB_LOOSE_RE = re.compile(r"—\s*\*\*.+?\*\*")
 
 
 def _malformed_attributions(report_md: str) -> list[tuple[str, str]]:
-    """[(status, linha)] das atribuições que o parse estrito NÃO captura.
+    """[(status, line)] of the attributions that strict parsing does NOT capture.
 
-    Trabalha por BLOCO de blockquote, não por linha: uma quote legítima de duas linhas com
-    bold interno tinha a 1ª linha acusada de malformada e a MESMA quote aparecia logo
-    abaixo como verificada — vermelho com mensagem contraditória.
+    Works per blockquote BLOCK, not per line: a legitimate two-line quote with internal
+    bold had its 1st line accused of being malformed while the SAME quote appeared right
+    below as verified — red with a contradictory message.
 
-    E varre também FORA do blockquote: uma atribuição em prosa era invisível aos dois
-    gates (ambos exigiam `startswith(">")`), então uma quote fabricada fora de `>` passava
-    enquanto qualquer quote legítima no documento mantinha `findings` não-vazio.
+    And it also sweeps OUTSIDE the blockquote: an attribution in prose was invisible to
+    both gates (both required `startswith(">")`), so a fabricated quote outside `>`
+    passed as long as any legitimate quote in the document kept `findings` non-empty.
     """
-    ruins: list[tuple[str, str]] = []
-    segmento: list[str] = []   # a quote CORRENTE, não o bloco inteiro
+    bad: list[tuple[str, str]] = []
+    segment: list[str] = []   # the CURRENT quote, not the whole block
 
-    def fecha(seg: list[str]) -> None:
-        """Julga UMA quote. Por bloco, uma atribuição válida lavava a malformada ao lado.
+    def flush(seg: list[str]) -> None:
+        """Judges ONE quote. Per block, one valid attribution washed the malformed one
+        next to it.
 
-        O gate era por bloco porque uma quote legítima de duas linhas com bold interno
-        tinha a 1ª linha acusada de malformada. Mas um blockquote pode conter VÁRIAS
-        quotes, e por bloco bastava uma atribuição estrita em qualquer linha para o bloco
-        inteiro passar — a segunda, malformada, sumia. Fail-open num gate cujo trabalho
-        é impedir que frase inventada saia com nome de gente real em cima.
-        Por SEGMENTO resolve os dois: o bold interno continua sendo conteúdo do segmento
-        que termina em atribuição estrita, e o segmento que não termina em atribuição
-        estrita é julgado sozinho.
+        The gate was per block because a legitimate two-line quote with internal bold had
+        its 1st line accused of being malformed. But a blockquote can contain SEVERAL
+        quotes, and per block a single strict attribution on any line was enough for the
+        whole block to pass — the second, malformed one vanished. Fail-open in a gate
+        whose job is to keep an invented sentence from going out with a real person's
+        name on it.
+        Per SEGMENT solves both: internal bold remains content of the segment that ends
+        in a strict attribution, and a segment that does not end in a strict attribution
+        is judged on its own.
         """
         if not seg:
-            # Guard defensivo puro, e a auditoria por mutação confirma: neutralizá-lo não
-            # derruba teste nenhum, porque `any()` sobre lista vazia já é False. Fica pela
-            # legibilidade, não pela semântica — e a nota existe para o próximo auditor
-            # não gastar tempo tentando escrever um teste que não existe.
+            # Purely defensive guard, and the mutation audit confirms it: neutralizing it
+            # breaks no test, because `any()` over an empty list is already False. It
+            # stays for readability, not semantics — and this note exists so the next
+            # auditor doesn't waste time trying to write a test that doesn't exist.
             return
         if any(ATTRIB_LOOSE_RE.search(l) for l in seg):
-            ruins.append(("atribuicao_malformada", seg[-1].strip()))
+            bad.append(("malformed_attribution", seg[-1].strip()))
 
-    for eh_quote, corpo in _linhas_de_quote(report_md):
-        if eh_quote:
-            segmento.append(corpo)
-            if ATTRIB_END_RE.search(corpo):
-                segmento = []   # quote fechada por atribuição estrita: em ordem
+    for is_quote, body in _quote_lines(report_md):
+        if is_quote:
+            segment.append(body)
+            if ATTRIB_END_RE.search(body):
+                segment = []   # quote closed by a strict attribution: in order
             continue
 
-        ln = corpo
-        fecha(segmento); segmento = []
-        # Atribuição em PROSA: tipografia de citação sem ser citação. Ancorada no FIM da
-        # linha, como uma atribuição de verdade — o `ATTRIB_LOOSE_RE` solto casava com
-        # ênfase comum do português no MEIO da frase ("discutiu — **muito** — o roadmap")
-        # e dava vermelho em texto correto. Gate que erra assim ensina a ser ignorado, e
-        # aí o vermelho de verdade passa junto.
+        ln = body
+        flush(segment); segment = []
+        # Attribution in PROSE: quote typography without being a quote. Anchored at the
+        # END of the line, like a real attribution — the loose `ATTRIB_LOOSE_RE` matched
+        # common mid-sentence emphasis ("discussed — **at length** — the roadmap") and
+        # flagged correct text red. A gate that errs like this teaches people to ignore
+        # it, and then the real red slips through with it.
         if ATTRIB_END_RE.search(ln.rstrip()):
-            ruins.append(("atribuicao_fora_de_quote", ln.strip()))
-    fecha(segmento)
-    return ruins
+            bad.append(("attribution_outside_quote", ln.strip()))
+    flush(segment)
+    return bad
 
 
 def verify(report_md: str, cells_dir: Path) -> list[dict]:
     corpus = cell_corpus(cells_dir)
     findings = []
     for status, ln in _malformed_attributions(report_md):
-        findings.append({"tipo": "quote", "advisor": "?", "status": status,
-                         "onde": "", "quote": ln[:120]})
+        findings.append({"type": "quote", "advisor": "?", "status": status,
+                         "where": "", "quote": ln[:120]})
     for text, name in _joined_quotes(report_md):
         qnorm = normalize(text)
         advisor = _advisor_for(name, corpus.keys())
         if len(qnorm) < MIN_QUOTE:
-            findings.append({"tipo": "quote", "advisor": advisor or name,
-                             "status": "curta_nao_verificavel", "onde": "",
+            findings.append({"type": "quote", "advisor": advisor or name,
+                             "status": "too_short_to_verify", "where": "",
                              "quote": text[:120]})
             continue
-        status, onde = _match(qnorm, corpus, advisor)
-        findings.append({"tipo": "quote", "advisor": advisor or name, "status": status,
-                         "onde": onde, "quote": text[:120]})
-    # Epígrafes de §4 (contratualmente verbatim; ausência = FALHA, nunca skip)
+        status, where = _match(qnorm, corpus, advisor)
+        findings.append({"type": "quote", "advisor": advisor or name, "status": status,
+                         "where": where, "quote": text[:120]})
+    # §4 epigraphs (contractually verbatim; absence = FAILURE, never a skip)
     sec4 = re.search(r"## §4(.*?)(?=\n## §|\Z)", report_md, re.DOTALL)
     if sec4:
         for h, b in re.findall(r"### (4\.\d[^\n]*)\n(.*?)(?=\n### |\Z)", sec4.group(1),
                                re.DOTALL):
             advisor = _advisor_for(h, corpus.keys())
-            m = re.search(r'\*["“]([^*]+?)["”]\*', b, re.DOTALL)  # tolera epígrafe quebrada
+            m = re.search(r'\*["“]([^*]+?)["”]\*', b, re.DOTALL)  # tolerates a broken epigraph
             if not m:
-                findings.append({"tipo": "epigrafe", "advisor": advisor or h[:20],
-                                 "status": "epigrafe_ausente", "onde": "",
+                findings.append({"type": "epigraph", "advisor": advisor or h[:20],
+                                 "status": "missing_epigraph", "where": "",
                                  "quote": h[:120]})
                 continue
             qnorm = normalize(re.sub(r"\s+", " ", m.group(1)))
-            status, onde = _match(qnorm, corpus, advisor)
-            findings.append({"tipo": "epigrafe", "advisor": advisor or h[:20],
-                             "status": status, "onde": onde, "quote": m.group(1)[:120]})
+            status, where = _match(qnorm, corpus, advisor)
+            findings.append({"type": "epigraph", "advisor": advisor or h[:20],
+                             "status": status, "where": where, "quote": m.group(1)[:120]})
     return findings
 
 
 def main() -> int:
     if len(sys.argv) != 3:
-        print("uso: qverify.py <report.md> <cells_dir>")
+        print("usage: qverify.py <report.md> <cells_dir>")
         return 2
     report, cells_dir = Path(sys.argv[1]), Path(sys.argv[2])
     if not report.exists() or not cells_dir.is_dir():
-        print(f"VERIFICAÇÃO DE QUOTES VERMELHA: caminho inválido ({report} / {cells_dir})")
+        print(f"QUOTE VERIFICATION RED: invalid path ({report} / {cells_dir})")
         return 1
     findings = verify(report.read_text(), cells_dir)
     bad = [f for f in findings if f["status"] != "verified"]
     ok = len(findings) - len(bad)
     if bad:
-        print(f"VERIFICAÇÃO DE QUOTES VERMELHA — {len(bad)} de {len(findings)} não verificadas:")
+        print(f"QUOTE VERIFICATION RED — {len(bad)} of {len(findings)} not verified:")
         for f in bad:
-            extra = f" (match em '{f['onde']}')" if f["status"] == "atribuicao_divergente" else ""
-            print(f"  ✗ [{f['tipo']}|{f['advisor']}|{f['status']}]{extra} \"{f['quote']}\"")
-        print("Corrigir pro verbatim do card (ou remover) e re-rodar. "
-              "Quote não-verificada não vai pro decisor.")
+            extra = f" (matched in '{f['where']}')" if f["status"] == "divergent_attribution" else ""
+            print(f"  ✗ [{f['type']}|{f['advisor']}|{f['status']}]{extra} \"{f['quote']}\"")
+        print("Fix to the card's verbatim (or remove) and re-run. "
+              "An unverified quote does not reach the decision-maker.")
         return 1
     if not findings and ATTRIB_LOOSE_RE.search(report.read_text()):
-        # "VERDE — 0/0" num dossiê QUE TEM atribuições significa que o verificador não
-        # entendeu nenhuma delas, não que estão todas certas. Verde vazio é falso verde.
-        print("VERIFICAÇÃO DE QUOTES VERMELHA: o dossiê tem quotes atribuídas e NENHUMA "
-              "foi extraída — a forma da atribuição não bate com o contrato "
-              '(> "texto." — **Nome** (lente simulada · <modelo>)).')
+        # "GREEN — 0/0" on a dossier THAT HAS attributions means the verifier understood
+        # none of them, not that they are all correct. An empty green is a false green.
+        print("QUOTE VERIFICATION RED: the dossier has attributed quotes and NONE "
+              "were extracted — the attribution form does not match the contract "
+              '(> "text." — **Name** (simulated lens · <model>)).')
         return 1
-    print(f"VERIFICAÇÃO DE QUOTES VERDE — {ok}/{len(findings)} verificadas por código.")
+    print(f"QUOTE VERIFICATION GREEN — {ok}/{len(findings)} verified by code.")
     return 0
 
 

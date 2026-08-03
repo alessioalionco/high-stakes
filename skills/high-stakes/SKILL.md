@@ -1,112 +1,113 @@
 ---
 name: high-stakes
-description: "Modo High Stakes: motor de rigor para DECISÃO de alto risco e ambígua (deck/slide para investidor, board ou cliente; narrativa; posicionamento; decisão estratégica). Refina o pedido com um brief pré-preenchido, aterra os inputs na verdade, roda um painel adversarial cego (personas × modelos de famílias diferentes) sobre cenários contrafactuais, refuta o próprio consenso, e devolve um dossiê com quotes verificadas por código. Use quando o usuário disser 'entra no modo high stakes', 'modo high stakes', 'high stakes', ou ao pedir um artefato/decisão que vai para fora e é caro de refazer."
+description: "High Stakes mode: a rigor engine for high-stakes, ambiguous DECISIONS (deck/slide for an investor, board, or client; narrative; positioning; strategic decision). Refines the ask with a pre-filled brief, grounds the inputs in truth, runs a blind adversarial panel (personas × models from different families) over counterfactual scenarios, refutes its own consensus, and returns a dossier with code-verified quotes. Use when the user says 'enter high stakes mode', 'high stakes mode', 'high stakes', or asks for an artifact/decision that goes out the door and is expensive to redo."
 ---
 
-# Modo High Stakes — adapter
+# High Stakes mode — adapter
 
-> Este arquivo é o **adapter**: gatilhos, cola e os caminhos desta instalação. A
-> metodologia inteira vive no core, que é neutro de harness. **Este adapter não duplica o
-> motor — ele aponta para ele.**
+> This file is the **adapter**: triggers, glue, and this installation's paths. The
+> entire methodology lives in the core, which is harness-neutral. **This adapter does not
+> duplicate the engine — it points to it.**
 
-## O core (leia estes arquivos — não trabalhe de memória)
+## The core (read these files — do not work from memory)
 
-O core viaja dentro do pacote Python. Descubra onde ele está:
+The core travels inside the Python package. Find out where it is:
 
 ```bash
-<raiz-do-plugin>/bin/high-stakes paths core
+<plugin-root>/bin/high-stakes paths core
 ```
 
-> **A raiz do plugin** é dois níveis acima deste arquivo (este é
-> `<raiz>/skills/high-stakes/SKILL.md`). Use `${CLAUDE_PLUGIN_ROOT}` se o harness a
-> expuser. **Sempre invoque pelo `bin/high-stakes`**: `python3 -m high_stakes.X` só
-> funciona se o pacote já estiver no `sys.path`, o que é falso numa instalação limpa.
+> **The plugin root** is two levels above this file (this is
+> `<root>/skills/high-stakes/SKILL.md`). Use `${CLAUDE_PLUGIN_ROOT}` if the harness
+> exposes it. **Always invoke through `bin/high-stakes`**: `python3 -m high_stakes.X` only
+> works if the package is already on `sys.path`, which is false on a clean install.
 
-**Antes de executar cada passo, leia a seção correspondente.** É instrução dura: ler no
-começo e trabalhar de memória depois é como se produz um dossiê raso.
+**Before executing each step, read the corresponding section.** This is a hard
+instruction: reading at the start and working from memory afterward is how shallow
+dossiers get produced.
 
-| Quando | Leia |
+| When | Read |
 |---|---|
-| Sempre, na ativação | `methodology.md` — os 3 órgãos, floor-check, cegamento de marca, síntese sem perda |
-| Nos gates | `sections/interactive-gates.md` — Gate A/Gate B, presets rápido×cheio, custo |
-| Na devolutiva e no render | `sections/output-contract.md` — taxonomia, mapa §0–§7, o gate de render |
-| Ao gravar uma decisão | `sections/run-persistence.md` — layout, material sensível, manifesto |
-| Ao disparar chamadas pagas | `execution.md` — capacidades, provedor, degradação, custo |
+| Always, on activation | `methodology.md` — the 3 organs, floor-check, brand blinding, lossless synthesis |
+| At the gates | `sections/interactive-gates.md` — Gate A/Gate B, quick×full presets, cost |
+| At the report and the render | `sections/output-contract.md` — taxonomy, the §0–§7 map, the render gate |
+| When recording a decision | `sections/run-persistence.md` — layout, sensitive material, manifest |
+| When firing paid calls | `execution.md` — capabilities, provider, degradation, cost |
 
-## Modos de entrada
+## Entry modes
 
-- **Problema NOVO** → 2 gates. Gate A: perguntas essenciais + materiais + agenda de
-  pesquisa. Gate B: brief afiado + composição do board + devolutiva padrão + roster + custo
-  estimado → GO.
-- **Problema JÁ TRABALHADO** ("carrega o problema X") → recarregar o run gravado
-  (brief, board, roster, dossiê, ledger) e oferecer o menu: nova rodada · run rápido ·
-  aprofundar um item · registrar o desfecho real · encerrar.
-- **Preset rápido** (tema recorrente): 3 lentes + generalista, júri de 3, cenário único.
-  **Preset cheio** (inédito ou irreversível): 5–7 lentes, júri de 4, os 2 gates.
+- **NEW problem** → 2 gates. Gate A: essential questions + materials + investigation
+  agenda. Gate B: sharpened brief + board composition + standard report + roster + estimated
+  cost → GO.
+- **ALREADY-WORKED problem** ("load problem X") → reload the recorded run
+  (brief, board, roster, dossier, ledger) and offer the menu: new round · quick run ·
+  go deeper on one item · record the real-world outcome · close out.
+- **Quick preset** (recurring topic): 3 lenses + generalist, jury of 3, single scenario.
+  **Full preset** (novel or irreversible): 5–7 lenses, jury of 4, both gates.
 
-## Caminhos e comandos desta instalação
+## This installation's paths and commands
 
 ```bash
-bin/high-stakes config          # config efetivo + de onde cada coisa veio
-bin/high-stakes paths core      # contratos       (dentro do pacote)
-bin/high-stakes paths boards    # lentes que vêm na instalação
-bin/high-stakes paths examples  # o dossiê de referência que a regra R1 manda abrir
+bin/high-stakes config          # effective config + where each value came from
+bin/high-stakes paths core      # contracts       (inside the package)
+bin/high-stakes paths boards    # lenses that ship with the installation
+bin/high-stakes paths examples  # the reference dossier that rule R1 says to open
 ```
 
-- **Roster de modelos:** `bin/high-stakes config` mostra o `pin_path` em vigor. O
-  arquivo do usuário (`$HIGH_STAKES_HOME/roster-pin.yaml`, padrão `~/.high-stakes/`) ganha
-  do que vem embarcado. **Congela dentro de um loop** — trocar juiz no meio mata a
-  comparação entre rodadas.
-- **Onde a decisão é gravada:** `runs_dir` do config (padrão `./high-stakes-runs`).
-- **Pool de lentes:** `boards_dir` do config. Quando o board for formado do zero, ofereça
-  salvar o pool ali para reuso.
-- **Chave de API:** `OPENROUTER_API_KEY` no ambiente. Nunca no config, nunca no repo.
+- **Model roster:** `bin/high-stakes config` shows the `pin_path` in effect. The
+  user's file (`$HIGH_STAKES_HOME/roster-pin.yaml`, default `~/.high-stakes/`) wins
+  over the shipped one. **Freeze it inside a loop** — swapping a judge mid-way kills the
+  comparison across rounds.
+- **Where the decision is recorded:** the config's `runs_dir` (default `./high-stakes-runs`).
+- **Lens pool:** the config's `boards_dir`. When a board is formed from scratch, offer
+  to save the pool there for reuse.
+- **API key:** `OPENROUTER_API_KEY` in the environment. Never in the config, never in the repo.
 
-## Quando ativar / NÃO ativar
+## When to activate / NOT activate
 
-- **Gatilho explícito:** "entra no modo high stakes", "modo high stakes", "high stakes".
-- **Auto-sugerir** (perguntando antes) só quando os TRÊS batem: stakes altos (vai para
-  fora ou é caro de refazer) · ambiguidade real (decisão de gosto/julgamento, não de fato)
-  · contexto que está na cabeça do usuário e não dá para inferir do repositório.
-- **NÃO ativar → redirecionar:** tarefa mecânica ou de baixo risco → executar direto com
-  defaults e mostrar a suposição · código, build ou config → o pipeline de engenharia
-  normal. Nunca virar questionário em branco.
+- **Explicit trigger:** "enter high stakes mode", "high stakes mode", "high stakes".
+- **Auto-suggest** (asking first) only when ALL THREE hold: high stakes (it goes out
+  the door or is expensive to redo) · genuine ambiguity (a matter of taste/judgment, not
+  fact) · context that lives in the user's head and cannot be inferred from the repository.
+- **Do NOT activate → redirect:** mechanical or low-risk task → execute directly with
+  defaults and show the assumption · code, build, or config → the normal engineering
+  pipeline. Never turn into a blank questionnaire.
 
 ## Guardrails
 
-### O render do dossiê passa por gates de código
+### The dossier render goes through code gates
 
-As regras moram no core (`sections/output-contract.md`, seção do gate de render) e devem
-ser **relidas no ato do render** — ter lido no começo do fluxo não conta. Os três
-comandos, todos com exit 0 obrigatório antes de entregar:
+The rules live in the core (`sections/output-contract.md`, render-gate section) and must
+be **re-read at render time** — having read them at the start of the flow does not count.
+The three commands, all required to exit 0 before delivering:
 
 ```bash
-bin/high-stakes render_gate    <report.md>              # estrutura §0–§7 + jargão
-bin/high-stakes qverify        <report.md> <cells_dir>  # toda quote é verbatim
-bin/high-stakes render_dossier <report.md>              # HTML single-file
+bin/high-stakes render_gate    <report.md>              # §0–§7 structure + jargon
+bin/high-stakes qverify        <report.md> <cells_dir>  # every quote is verbatim
+bin/high-stakes render_dossier <report.md>              # single-file HTML
 ```
 
-**Toda quote atribuída leva `(lente simulada · <modelo>)` na própria linha**, e o §Escopo
-carrega a declaração completa. A primeira protege o fragmento recortado; a segunda, o
-documento. O gate reprova sem qualquer uma das duas.
+**Every attributed quote carries `(simulated lens · <model>)` on the attribution line**, and the
+§Scope carries the full disclosure. The first protects the clipped fragment; the second,
+the document. The gate fails without either of the two.
 
-**O §Escopo declara que as personas são simuladas.** As lentes levam nomes de pessoas
-reais e a atribuição `— **Nome**` tem a tipografia de citação real — e o dossiê circula. A
-verificação de quotes garante fidelidade ao que o MODELO escreveu naquela lente, nunca que
-a pessoa disse aquilo. Sem a declaração, o gate reprova.
+**The §Scope declares that the personas are simulated.** The lenses carry the names of
+real people and the `— **Name**` attribution has the typography of a real citation — and
+the dossier circulates. Quote verification guarantees fidelity to what the MODEL wrote
+under that lens, never that the person said it. Without the disclosure, the gate fails.
 
-O dossiê é escrito **a partir dos cards brutos**, nunca de contagens agregadas. Esta é a
-falha que originou o gate: um dossiê montado de tallies perde a voz dos conselheiros e
-vira relatório técnico ilegível.
+The dossier is written **from the raw cards**, never from aggregate counts. This is the
+failure that gave birth to the gate: a dossier assembled from tallies loses the advisors'
+voices and turns into an unreadable technical report.
 
-### Mecanismo sem build → DECLARAR e degradar, nunca simular
+### Mechanism without a build → DECLARE and degrade, never simulate
 
-Onde um mecanismo descrito no contrato não estiver construído, **declare a degradação
-explicitamente** e siga. Jamais apresentar um contrato como se o build existisse, e jamais
-fingir que um passo rodou.
+Wherever a mechanism described in the contract is not built, **declare the degradation
+explicitly** and proceed. Never present a contract as if the build existed, and never
+pretend a step ran.
 
-### O painel é ferramenta de estresse, não oráculo
+### The panel is a stress tool, not an oracle
 
-O motor mede como uma decisão **resiste a ataque**, não prevê como uma sala reagirá. A
-lente cética roda sempre — inclusive quando a audiência é amistosa. Um painel calibrado
-para agradar não tem valor de teste.
+The engine measures how a decision **withstands attack**; it does not predict how a room
+will react. The skeptical lens always runs — including when the audience is friendly. A
+panel calibrated to please has no value as a test.

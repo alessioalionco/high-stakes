@@ -5,15 +5,15 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "high-stakes"
 version = "1.0.0"
-description = "Motor de rigor para decisões de alto risco: painel adversarial cego, refutação e verificação por código"
+description = "A rigor engine for high-stakes decisions: blind adversarial panel, refutation, and code verification"
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [{ name = "Alessio Alionco" }]
-requires-python = ">=3.11"          # tomllib na stdlib
+requires-python = ">=3.11"          # tomllib in the stdlib
 
-# ZERO dependências, de propósito. O único uso de rede é HTTP, feito com `urllib` da
-# stdlib (high_stakes/http_client.py). Instalar o plugin tem de ser o único passo:
-# uma dependência faltando falharia DEPOIS do brief e do custo aprovado.
+# ZERO dependencies, on purpose. The only network use is HTTP, done with the stdlib's
+# `urllib` (high_stakes/http_client.py). Installing the plugin has to be the only step:
+# a missing dependency would fail AFTER the brief and the approved cost.
 dependencies = []
 
 keywords = ["decision-making", "red-team", "llm", "adversarial", "claude-code"]
@@ -30,6 +30,7 @@ Homepage = "https://github.com/alessioalionco/high-stakes"
 packages = ["high_stakes"]
 
 [tool.setuptools.package-data]
-# Contratos e CSS viajam COM o código: o motor lê os .md em alto do fluxo e o renderer
-# lê o .css. Fora do pacote, os dois somem numa instalação limpa.
+# Contracts and CSS travel WITH the code: the engine reads the .md files high in the
+# flow and the renderer reads the .css. Outside the package, both vanish on a clean
+# install.
 high_stakes = ["core/*.md", "core/sections/*.md", "assets/*.css"]

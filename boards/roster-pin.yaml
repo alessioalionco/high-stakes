@@ -1,33 +1,36 @@
-# Roster PIN — quem julga, e por quê.
+# Roster PIN — who judges, and why.
 #
-# O motor não escolhe modelo por gosto: os assentos saíram de um experimento que mediu
-# contribuição marginal por dólar sobre células IDÊNTICAS. Trocar por moda ("saiu modelo
-# novo") desfaz a comparação — re-decida com dado, não com release note.
+# The engine does not pick models by taste: the seats came out of an experiment that
+# measured marginal contribution per dollar over IDENTICAL cells. Swapping on fashion
+# ("a new model dropped") undoes the comparison — re-decide with data, not with a
+# release note.
 #
-# O pin CONGELA o roster dentro de um loop: se os juízes mudam no meio, a comparação
-# entre rodadas morre. Re-pesquise só sob gatilho: pin vencido (ttl_days) · release
-# relevante · o domínio exige competência que o pin não tem.
+# The pin FREEZES the roster inside a loop: if the judges change mid-way, the comparison
+# across rounds dies. Re-research only on a trigger: expired pin (ttl_days) · relevant
+# release · the domain demands a competence the pin lacks.
 #
-# Copie para $HIGH_STAKES_HOME/roster-pin.yaml (default ~/.high-stakes/) para editar.
-pinned: 1970-01-01        # <- troque pela data em que VOCÊ fixou este roster.
-                          #    Enquanto for esta, o pin conta como VENCIDO de propósito:
-                          #    força re-verificar o roster antes da primeira decisão.
+# Copy to $HIGH_STAKES_HOME/roster-pin.yaml (default ~/.high-stakes/) to edit.
+pinned: 1970-01-01        # <- replace with the date YOU pinned this roster.
+                          #    While it stays at this value, the pin counts as EXPIRED on
+                          #    purpose: it forces re-verifying the roster before the
+                          #    first decision.
 ttl_days: 30
-source: "medição de contribuição marginal por dólar sobre células idênticas"
+source: "measurement of marginal contribution per dollar over identical cells"
 
-# Sintetiza o dossiê e NÃO vota — quem escreve a síntese não pode ser parte do júri.
+# Synthesizes the dossier and does NOT vote — whoever writes the synthesis cannot sit
+# on the jury.
 chairman: {model: anthropic/claude-fable-5, family: anthropic, votes: false}
 
-# Júri do preset quick. Famílias diferentes de propósito: dois modelos da mesma família
-# erram junto, e um painel que erra junto não é painel.
+# Jury for the quick preset. Different families on purpose: two models from the same
+# family fail together, and a panel that fails together is not a panel.
 quick_judges:
   - {model: openai/gpt-5.6-sol, family: openai}
   - {model: x-ai/grok-4.5, family: xai}
   - {model: z-ai/glm-5.2, family: zai, reasoning: off}
 
-# 4º assento, só no preset cheio.
+# 4th seat, full preset only.
 full_extra_judge: {model: moonshotai/kimi-k3, family: moonshot, reasoning: off}
 
-# Refutador: ataca o consenso do painel. Papel separado do júri de propósito — quem
-# julga não pode ser quem refuta.
+# Refuter: attacks the panel's consensus. A role separate from the jury on purpose —
+# whoever judges cannot be the one who refutes.
 refuter: {model: google/gemini-3.1-pro-preview, family: google}

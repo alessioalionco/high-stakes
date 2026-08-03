@@ -1,13 +1,13 @@
 #!/bin/sh
-# high-stakes — ponto de entrada dos comandos do motor.
+# high-stakes — entry point for the engine's commands.
 #
-# Existe porque `python3 -m high_stakes.X` só funciona se o pacote já estiver no
-# sys.path — o que é verdade no repositório do autor e falso na máquina de quem instala
-# o plugin. O sintoma era ModuleNotFoundError de qualquer diretório real, e o smoke test
-# não pegava porque ele mesmo setava PYTHONPATH.
+# It exists because `python3 -m high_stakes.X` only works if the package is already on
+# sys.path — which is true in the author's repository and false on the machine of whoever
+# installs the plugin. The symptom was a ModuleNotFoundError from any real directory, and
+# the smoke test did not catch it because it set PYTHONPATH itself.
 #
-# Este script resolve a raiz do pacote a partir da PRÓPRIA localização, então funciona de
-# qualquer cwd, sem instalação, sem variável de ambiente e sem pip.
+# This script resolves the package root from its OWN location, so it works from any cwd,
+# with no install, no environment variable, and no pip.
 #
 #   bin/high-stakes render_gate <report.md>
 #   bin/high-stakes qverify <report.md> <cells_dir>
@@ -17,27 +17,28 @@
 set -eu
 
 if [ "$#" -lt 1 ]; then
-    echo "uso: high-stakes <comando> [args...]" >&2
-    echo "comandos: render_gate · qverify · render_dossier · paths · config" >&2
+    echo "usage: high-stakes <command> [args...]" >&2
+    echo "commands: render_gate · qverify · render_dossier · paths · config" >&2
     exit 2
 fi
 
-# Resolve symlinks antes do dirname: `ln -s .../bin/high-stakes ~/.local/bin/high-stakes`
-# é a forma padrão de pôr um launcher no PATH, e sem desreferenciar o dirname apontaria
-# para ~/.local/bin — reproduzindo o ModuleNotFoundError que este script existe para matar.
+# Resolve symlinks before the dirname: `ln -s .../bin/high-stakes ~/.local/bin/high-stakes`
+# is the standard way to put a launcher on the PATH, and without dereferencing, the
+# dirname would point at ~/.local/bin — reproducing the ModuleNotFoundError this script
+# exists to kill.
 #
-# O laço TEM cap de iteração: um ciclo de symlink (a -> b -> a) fazia ele rodar para
-# sempre, e o usuário via o comando pendurado sem uma linha de saída — pior que um erro,
-# porque não há o que reportar nem o que procurar. 40 é o mesmo teto que o kernel usa
-# para resolução de link; cadeia legítima nunca chega perto.
+# The loop HAS an iteration cap: a symlink cycle (a -> b -> a) made it run forever, and
+# the user saw the command hang without a single line of output — worse than an error,
+# because there is nothing to report and nothing to search for. 40 is the same ceiling
+# the kernel uses for link resolution; a legitimate chain never comes close.
 SRC="$0"
-SALTOS=0
+HOPS=0
 while [ -L "$SRC" ]; do
-    SALTOS=$((SALTOS + 1))
-    if [ "$SALTOS" -gt 40 ]; then
-        echo "high-stakes: cadeia de symlinks longa demais a partir de '$0'" >&2
-        echo "  (mais de 40 saltos — provavelmente um ciclo: a -> b -> a)." >&2
-        echo "  Rode 'ls -l' no caminho acima, ou chame o script pelo caminho real." >&2
+    HOPS=$((HOPS + 1))
+    if [ "$HOPS" -gt 40 ]; then
+        echo "high-stakes: symlink chain too long starting from '$0'" >&2
+        echo "  (more than 40 hops — probably a cycle: a -> b -> a)." >&2
+        echo "  Run 'ls -l' on the path above, or call the script by its real path." >&2
         exit 2
     fi
     LINK=$(readlink "$SRC")

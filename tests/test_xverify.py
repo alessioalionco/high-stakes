@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""test_xverify.py — suíte executável do X-verify (convenção: PASS/exit≠0)."""
+"""test_xverify.py — executable suite for X-verify (convention: PASS/exit≠0)."""
 import sys
 from pathlib import Path
 
@@ -21,30 +21,30 @@ def fails(text, frag):
         return frag in str(e)
 
 
-GOOD = ('{"caso_contra": "O material mostra 2.6x com deals nomeados.", '
-        '"o_que_sobrevive": "A falta de margem de erro segue de pé.", '
-        '"fatos_novos": [{"fato": "runway 15m no Q4", "onde": "quadro trimestral"}], '
-        '"veredito_sugerido": "PARCIAL"}')
+GOOD = ('{"case_against": "The material shows 2.6x with named deals.", '
+        '"what_survives": "The missing error margin still stands.", '
+        '"new_facts": [{"fact": "15m runway in Q4", "where": "quarterly board"}], '
+        '"suggested_verdict": "PARTIAL"}')
 
 
 def main() -> int:
-    tasks = build_refute_tasks("MATERIAL X", {"i1": "claim um", "i2": "claim dois"})
+    tasks = build_refute_tasks("MATERIAL X", {"i1": "claim one", "i2": "claim two"})
     results = [
-        case("parse ok com concessão", _parse(GOOD)["veredito_sugerido"] == "PARCIAL"),
-        case("cerca de código tolerada", bool(_parse("```json\n" + GOOD + "\n```")["fatos_novos"])),
-        case("REGRESSÃO X-V1: concessão vazia REPROVA (anti-viés-advogado)",
-             fails(GOOD.replace("A falta de margem de erro segue de pé.", ""), "o_que_sobrevive")),
-        case("veredito fora do enum reprova",
-             fails(GOOD.replace("PARCIAL", "DESTRUIDO"), "veredito_sugerido")),
-        case("fatos_novos opcional (default [])",
-             _parse(GOOD.replace('"fatos_novos": [{"fato": "runway 15m no Q4", "onde": "quadro trimestral"}], ', ""))["fatos_novos"] == []),
-        case("1 task por item, material no user, ids únicos",
+        case("parse ok with concession", _parse(GOOD)["suggested_verdict"] == "PARTIAL"),
+        case("code fence tolerated", bool(_parse("```json\n" + GOOD + "\n```")["new_facts"])),
+        case("REGRESSION X-V1: empty concession FAILS (anti-advocate-bias)",
+             fails(GOOD.replace("The missing error margin still stands.", ""), "what_survives")),
+        case("verdict outside the enum fails",
+             fails(GOOD.replace("PARTIAL", "DESTROYED"), "suggested_verdict")),
+        case("new_facts optional (default [])",
+             _parse(GOOD.replace('"new_facts": [{"fact": "15m runway in Q4", "where": "quarterly board"}], ', ""))["new_facts"] == []),
+        case("1 task per item, material in user message, unique ids",
              len(tasks) == 2 and {t["cell_id"] for t in tasks} == {"refuter_i1", "refuter_i2"}
              and all("MATERIAL X" in t["messages"][1]["content"] for t in tasks)),
-        case("REGRESSÃO truncamento: max_tokens default alto (>=8000)",
+        case("truncation REGRESSION: default max_tokens high (>=8000)",
              all(t["request"]["max_tokens"] >= 8000 for t in tasks)),
     ]
-    print(f"{sum(results)}/{len(results)} testes ok")
+    print(f"{sum(results)}/{len(results)} tests ok")
     return 0 if all(results) else 1
 
 
