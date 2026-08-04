@@ -138,20 +138,28 @@ def main() -> int:
         # own the rest.
         import json as _json
         mkt_p = ROOT / ".claude-plugin" / "marketplace.json"
+        roots_ok = False   # defined up front: a missing marketplace.json must not turn
+                           # the guarded block below into a NameError
         case("marketplace.json exists (without it, `/plugin marketplace add` fails)",
              mkt_p.exists())
         if mkt_p.exists():
+            # Both roots are TYPE-CHECKED before any `.get()`. A manifest whose top level
+            # is a list or a scalar used to raise AttributeError here, and a traceback is
+            # not a test result: it reports "the suite crashed" where the diagnostic case
+            # should have named the malformed file.
             mkt = _json.loads(mkt_p.read_text())
             plug = _json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text())
+            roots_ok = isinstance(mkt, dict) and isinstance(plug, dict)
+            case("both manifests are JSON objects at the top level", roots_ok,
+                 f"marketplace={type(mkt).__name__} plugin={type(plug).__name__}")
+        if mkt_p.exists() and roots_ok:
             missing = [c for c in ("name", "owner", "plugins") if c not in mkt]
             case("marketplace.json has the required fields", not missing,
                  f"missing: {missing}")
 
-            # `owner` and `plugins` are TYPE-CHECKED before use, not after. A malformed
-            # manifest used to raise instead of failing: `mkt.get("owner", {}).get("name")`
-            # is an AttributeError when `owner` is a string, and `entries[0]` indexes a
-            # string one character at a time. A crashing suite reports a traceback where
-            # the diagnostic case should have been.
+            # `owner` and `plugins` are TYPE-CHECKED before use, not after. Same reason:
+            # `mkt.get("owner", {}).get("name")` is an AttributeError when `owner` is a
+            # string, and `entries[0]` indexes a string one character at a time.
             owner = mkt.get("owner")
             case("owner is an object with a non-empty name (a string here fails install)",
                  isinstance(owner, dict) and isinstance(owner.get("name"), str)
@@ -161,6 +169,14 @@ def main() -> int:
             case("plugins is a list", isinstance(entries, list), f"plugins={type(entries).__name__}")
             entries = entries if isinstance(entries, list) else []
             case("at least one plugin is listed", bool(entries))
+            # EVERY entry must be an object, and this is its own case on purpose. A
+            # `plugins: [null]` passed the two checks above and then met an
+            # `isinstance(entries[0], dict)` guard that skipped the four entry assertions
+            # in SILENCE — 29 cases ran where 33 should have. A guard that hides
+            # assertions is worse than the crash it replaced: the crash was at least loud.
+            case("every plugin entry is an object",
+                 bool(entries) and all(isinstance(e, dict) for e in entries),
+                 f"entry types: {[type(e).__name__ for e in entries]}")
             if entries and isinstance(entries[0], dict):
                 e0 = entries[0]
                 case("the plugin entry has name and source",
@@ -259,6 +275,9 @@ def main() -> int:
         # ---- the plugin ----
         import json
         man = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text())
+        case("plugin.json is a JSON object at the top level", isinstance(man, dict),
+             f"top level is {type(man).__name__}")
+        man = man if isinstance(man, dict) else {}
         case("the plugin manifest has the required fields",
              all(k in man for k in ("name", "description", "version", "author")))
         # REGRESSION (measured): `author` was the string "Alessio Alionco" and every
