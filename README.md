@@ -270,7 +270,7 @@ on failure.
 for t in tests/test_*.py; do python3 -m "tests.$(basename "$t" .py)" || exit 1; done
 ```
 
-**304 tests across 11 suites — all 12 modules covered.** The money path (per-run cap,
+**306 tests across 11 suites — all 12 modules covered.** The money path (per-run cap,
 conservative charging on post-dispatch failure, a non-finite number from a provider
 cannot disable the cap), the parallel dispatcher (a failing cell doesn't vanish,
 duplicate ids blocked before spend, resume keyed by input hash, judge isolation), reuse

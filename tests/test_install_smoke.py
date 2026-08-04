@@ -122,10 +122,20 @@ def main() -> int:
         # ---- the FIRST command the visitor runs has to exist ----
         # The README instructed `/plugin marketplace add`, and only `plugin.json` existed.
         # Without `marketplace.json` that command fails: the first thing anyone does after
-        # reading the landing page is hit an error. Schema checked against the official
-        # marketplace on disk and against the docs: required are `name`, `owner` and
-        # `plugins[]`; each plugin requires `name` and `source`; `"./"` is the repo root
-        # (the case here).
+        # reading the landing page is hit an error.
+        #
+        # SCOPE OF WHAT FOLLOWS — read before adding a case here. These are KNOWN-REGRESSION
+        # invariants, NOT schema validation. The authority on the schema is the consumer's
+        # own validator, `claude plugin validate <path> --strict`, and it runs in the private
+        # repo's publish gate (it cannot run here: CI has no `claude` CLI, and this workflow
+        # installs nothing on purpose). Re-implementing the schema here is what already
+        # failed: the block below used to assert `"author" in man`, which is TRUE when
+        # `author` is a string, and the plugin was uninstallable for every user while 304
+        # tests stayed green. An earlier version of this comment claimed the schema had been
+        # "checked against the official marketplace on disk" — the official corpus does use
+        # `author: {name, email}`, and the type was never compared. Do not grow a second
+        # source of truth here; add the regression you measured, and let the real validator
+        # own the rest.
         import json as _json
         mkt_p = ROOT / ".claude-plugin" / "marketplace.json"
         case("marketplace.json exists (without it, `/plugin marketplace add` fails)",
@@ -136,10 +146,22 @@ def main() -> int:
             missing = [c for c in ("name", "owner", "plugins") if c not in mkt]
             case("marketplace.json has the required fields", not missing,
                  f"missing: {missing}")
-            case("owner.name present (required)", bool(mkt.get("owner", {}).get("name")))
-            entries = mkt.get("plugins") or []
+
+            # `owner` and `plugins` are TYPE-CHECKED before use, not after. A malformed
+            # manifest used to raise instead of failing: `mkt.get("owner", {}).get("name")`
+            # is an AttributeError when `owner` is a string, and `entries[0]` indexes a
+            # string one character at a time. A crashing suite reports a traceback where
+            # the diagnostic case should have been.
+            owner = mkt.get("owner")
+            case("owner is an object with a non-empty name (a string here fails install)",
+                 isinstance(owner, dict) and isinstance(owner.get("name"), str)
+                 and bool(owner["name"].strip()),
+                 f"owner={owner!r}")
+            entries = mkt.get("plugins")
+            case("plugins is a list", isinstance(entries, list), f"plugins={type(entries).__name__}")
+            entries = entries if isinstance(entries, list) else []
             case("at least one plugin is listed", bool(entries))
-            if entries:
+            if entries and isinstance(entries[0], dict):
                 e0 = entries[0]
                 case("the plugin entry has name and source",
                      "name" in e0 and "source" in e0)
@@ -239,6 +261,16 @@ def main() -> int:
         man = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text())
         case("the plugin manifest has the required fields",
              all(k in man for k in ("name", "description", "version", "author")))
+        # REGRESSION (measured): `author` was the string "Alessio Alionco" and every
+        # `/plugin install high-stakes@high-stakes` died on
+        #   `author: Invalid input: expected object, received string`
+        # The presence check above does not see it — `"author" in man` is True either way.
+        # The schema wants an object; the official marketplace ships `{name, email}`.
+        _author = man.get("author")
+        case("plugin.json `author` is an object with a non-empty name, not a string",
+             isinstance(_author, dict) and isinstance(_author.get("name"), str)
+             and bool(_author["name"].strip()),
+             f"author={_author!r} — a string here makes the plugin impossible to install")
         case("the plugin's skill exists at the path the harness looks for",
              (ROOT / "skills" / man["name"] / "SKILL.md").exists())
         case("the plugin version matches the package's",

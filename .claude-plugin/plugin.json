@@ -2,5 +2,5 @@
   "name": "high-stakes",
   "description": "A rigor engine for high-stakes, ambiguous decisions: refines the ask, runs a blind adversarial panel (personas × models from different families), refutes the consensus, and returns a dossier where every quote is verified by code.",
   "version": "1.0.0",
-  "author": "Alessio Alionco"
+  "author": { "name": "Alessio Alionco" }
 }
