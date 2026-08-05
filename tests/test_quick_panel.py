@@ -60,7 +60,7 @@ def main() -> int:
             case("CACHING: byte-identical user prefix in every cell",
                  len(prefixes) == 1 and next(iter(prefixes)) == shared),
             case("CACHING: identical, generic system (persona in the suffix)",
-                 len(systems) == 1 and "The Unit Economist" not in next(iter(systems))),
+                 len(systems) == 1 and "Unit Economist" not in next(iter(systems))),
             case("persona/ask present in the suffix",
                  any("You are The Unit Economist" in t["messages"][1]["content"]
                      and "ASK(unit economist)" in t["messages"][1]["content"] for t in tasks)),
@@ -108,7 +108,7 @@ def main() -> int:
         # Today isolation is true by CONSTRUCTION (the message is assembled only from
         # material + persona + ask), but nothing locked the invariant: whoever added a
         # "round 2" feeding outputs back in would see nothing turn red. This locks it.
-        ANOTHER_ADVISORS_REPLY = "UNIT ECONOMIST'S VERDICT: the NRR does not support the thesis."
+        ANOTHER_ADVISORS_REPLY = "THE UNIT ECONOMIST'S VERDICT: the NRR does not support the thesis."
         markers = ["DECK XYZ 123"]  # the shared material is the ONLY common text
         contaminated = [t["cell_id"] for t in tasks
                         if ANOTHER_ADVISORS_REPLY in t["messages"][1]["content"]]

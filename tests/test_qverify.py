@@ -12,7 +12,7 @@ from pathlib import Path
 
 from high_stakes.qverify import _advisor_for, verify
 
-CELL_UNIT ECONOMIST = {
+CELL_UNIT_ECON = {
     "advisor": "unit economist", "status": "ok",
     "result": {
         "verdict_prose": ("Do not confuse reclassification with growth, consumption with "
@@ -26,7 +26,7 @@ CELL_UNIT ECONOMIST = {
         "questions_to_founder": ["What is the global forecast coverage?"],
     },
 }
-CELL_UNIT ECONOMIST2 = {
+CELL_UNIT_ECON2 = {
     "advisor": "unit economist", "status": "ok",
     "result": {"verdict_prose": "The market rewards margin, not empty category promise.",
                "items": [], "dud_flags": {}, "questions_to_founder": []},
@@ -75,8 +75,8 @@ def refuter_contract_ok() -> bool:
 def make_cells(tmp: Path) -> Path:
     d = tmp / "cells"
     d.mkdir()
-    (d / "cell_unit_economist_sol.json").write_text(json.dumps(CELL_UNIT ECONOMIST, ensure_ascii=False))
-    (d / "cell_unit_economist_glm.json").write_text(json.dumps(CELL_UNIT ECONOMIST2, ensure_ascii=False))
+    (d / "cell_unit_economist_sol.json").write_text(json.dumps(CELL_UNIT_ECON, ensure_ascii=False))
+    (d / "cell_unit_economist_glm.json").write_text(json.dumps(CELL_UNIT_ECON2, ensure_ascii=False))
     (d / "cell_model_theorist_glm.json").write_text(json.dumps(CELL_MODEL_THEORIST, ensure_ascii=False))
     (d / "refuter_gemini.json").write_text(json.dumps(REFUTER, ensure_ascii=False))
     return d

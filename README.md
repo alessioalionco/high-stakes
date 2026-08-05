@@ -18,19 +18,22 @@ You bring the question — a board deck, a positioning narrative, a strategic ca
 something that ships to the outside world and cannot be unshipped. The engine **builds
 the board for your problem**: it classifies what kind of panel the decision needs, maps
 what must be covered, and proposes one seat per axis, which you ratify or swap. Each seat
-is a lens on a sharp public thinker, and each lens runs on a different model family. A
-starter board of thirteen SaaS operators and investors ships in the box, and any board
-you build from scratch can be saved to your pool and reused.
+is a lens on one way the decision can fail, and each lens runs on a different model family.
+A starter pool of thirteen B2B SaaS lenses ships in the box, and any board you build from
+scratch can be saved to your pool and reused.
 
 It is not one AI opinion. It is a panel engineered to disagree — and it does not predict
 how the room will react. It measures **where your decision breaks under attack**, which
 is the useful question before you walk into the room.
 
-**About the advisors, said plainly:** the lenses carry names of real people, but they are
-**simulations by language models**, drawing on what the models know of each person's
-published thinking. The real people said none of this, and no curated index of their work
-is involved. The engine forces every dossier to declare this and rejects the ones that
-don't: the artifact circulates, and `— **Name**` looks exactly like a real citation.
+**About the advisors, said plainly:** the pool that ships is **archetypes** — no real
+person's name comes in the box. Anchoring a lens to a named public thinker is supported and
+it does sharpen the lens, but that anchor is yours to add in your own pool. When you do, the
+result is a **simulation by a language model**, drawing on what the model already knows of
+that person's published thinking: the real person said none of it, and no curated index of
+their work is involved. The engine forces every dossier to declare this and rejects the ones
+that don't, because the artifact circulates and `— **Name**` looks exactly like a real
+citation.
 
 ## The board is built for the problem
 
@@ -59,7 +62,8 @@ method with the most thought in it:
 
 ## Why this beats pasting the same prompt into a chat
 
-You could ask your favorite model to "act as a board of The Unit Economist, The Model Theorist, and The Wartime Operator." Here
+You could ask your favorite model to "act as a board of the three sharpest investors you
+know of." Here
 is what that doesn't get you, and what this engine was built for:
 
 **1. One model, one prompt, gets you the average.** Ask an LLM for an opinion and you
@@ -270,7 +274,7 @@ on failure.
 for t in tests/test_*.py; do python3 -m "tests.$(basename "$t" .py)" || exit 1; done
 ```
 
-**309 tests across 11 suites — all 12 modules covered.** The money path (per-run cap,
+**339 tests across 12 suites — all 12 modules covered.** The money path (per-run cap,
 conservative charging on post-dispatch failure, a non-finite number from a provider
 cannot disable the cap), the parallel dispatcher (a failing cell doesn't vanish,
 duplicate ids blocked before spend, resume keyed by input hash, judge isolation), reuse

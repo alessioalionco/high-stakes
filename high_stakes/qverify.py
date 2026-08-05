@@ -29,9 +29,9 @@ import unicodedata
 from typing import Iterable
 from pathlib import Path
 
-# Display name -> advisor key. ROLES first: "Anti-thesis of The Unit Economist" resolves to the role,
+# Display name -> advisor key. ROLES first: "Anti-thesis of X" resolves to the role,
 # not to the name that appears inside the heading.
-# ROLES: resolve before the name ("Anti-thesis of The Unit Economist" is the role, not The Unit Economist).
+# ROLES: resolve before the lens key ("Anti-thesis of X" is the role, not the lens X).
 ROLE_KEYS = [
     ("anti-thesis", "antithesis"), ("antithesis", "antithesis"),
     ("refuter", "refuter"), ("generalist", "generalist"),
@@ -149,8 +149,8 @@ def _strip_accents(s: str) -> str:
 
 def _advisor_for(name: str, corpus_keys: Iterable[str] = ()) -> str | None:
     """Display name -> advisor key. Roles first, then the REAL keys from that run's
-    cells (sorted longest to shortest, so that 'unit economist-antithesis' does not match
-    'unit economist' first)."""
+    cells (sorted longest to shortest, so that a longer key is not shadowed by a
+    shorter one that is its prefix)."""
     n = normalize(name)
     ns = _strip_accents(n)
     for token, key in ROLE_KEYS:

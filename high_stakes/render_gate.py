@@ -33,7 +33,7 @@ JARGON_PATTERNS = [
 ]
 
 # R7 — the dossier CIRCULATES. The "— **Name**" attribution uses real citation typography, and the
-# lenses carry the names of real people: whoever receives the PDF in a meeting can read "The Unit Economist
+# a lens can carry the name of a real person: whoever receives the PDF in a meeting reads "<Name>
 # said this about our deck". Quote verification guarantees fidelity to the CELL, not to the
 # person — a strong guarantee about the wrong thing, if the reader does not know what they are reading.
 # `\s+` and not " ": the sentence frequently wraps across two lines in markdown, and a rule
