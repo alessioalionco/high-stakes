@@ -169,19 +169,16 @@ entry, because the category already has them:
 
 What I looked for in the alternatives and could not find:
 
-- **Quotes verified by code.** Every attributed quote matched against the raw output of
-  that specific advisor, or the dossier is rejected. The category has this exposure — the
-  synthesis step paraphrases — and I could not find a project that checks.
-- **One evidence pack, identical for every seat.** Research runs once, before the panel,
-  and the material enters every cell as a byte-identical prefix, with each source
-  classified by trust tier (primary > analyst > press > vendor blog). Per-model web search
-  is common; the board arguing over the *same* grounded material, rather than over what
-  each model happens to remember, is what this buys.
-- **Nothing is dispatched before you approve the cost.** Gate B shows the sharpened brief,
-  the proposed board and the estimated spend, and waits. Cost *reporting* after the run is
-  common. A checkpoint before the first paid call is not.
-- **A spending cap that reserves before it dispatches**, with accounting on disk that holds
-  across processes, so two terminals on the same decision do not each get the full budget.
+- **Quotes verified by code** (argument 7 above). Every project in this category has the
+  exposure, because every one of them has a synthesis step that paraphrases. I could not
+  find one that checks.
+- **One evidence pack, identical for every seat** (argument 4). Per-model web search is
+  common. Handing every seat the same graded material — so the panel argues over one set
+  of facts instead of each model's memory — is not, and neither is grading the sources.
+- **A checkpoint before the first paid call** (Gate B). Reporting the cost after the run is
+  common. Refusing to start until you have seen the estimate and said GO is not.
+- **A spending cap that reserves before it dispatches**, with accounting on disk across
+  processes, so two terminals on the same decision do not each get the full budget.
 - **Gates that fail closed.** Three of them, each exiting non-zero. Not schema validation
   that trusts the model to comply — a gate that stops delivery.
 
