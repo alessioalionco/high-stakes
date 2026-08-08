@@ -60,6 +60,34 @@ method with the most thought in it:
   (`~/.high-stakes/boards`) for reuse. The shipped SaaS pool is a starter, not the
   product.
 
+## How a run works
+
+```
+        your problem
+             │
+        Gate A  ── essential questions + materials + research agenda
+             │
+        Gate B  ── sharpened brief + proposed board + cost → you say GO
+             │
+             ▼
+   BLIND adversarial panel
+   personas × models from different families, no cell sees another
+             │
+             ▼
+   per-item refutation ── a separate model attacks the panel's consensus
+             │
+             ▼
+   ┌── three code gates, all must exit 0 ─────────────┐
+   │  render_gate     dossier structure + jargon      │
+   │  qverify         every quote is verbatim         │
+   │  render_dossier  single-file HTML                │
+   └──────────────────────────────────────────────────┘
+             │
+             ▼
+       dossier §0–§7
+```
+
+
 ## Why this beats pasting the same prompt into a chat
 
 You could ask your favorite model to "act as a board of the three sharpest investors you
@@ -180,33 +208,6 @@ export OPENROUTER_API_KEY=...
 
 The engine drives the rest: refines the ask into a pre-filled brief, proposes the board
 composition, shows the estimated cost, and only dispatches after your GO.
-
-## How a run works
-
-```
-        your problem
-             │
-        Gate A  ── essential questions + materials + research agenda
-             │
-        Gate B  ── sharpened brief + proposed board + cost → you say GO
-             │
-             ▼
-   BLIND adversarial panel
-   personas × models from different families, no cell sees another
-             │
-             ▼
-   per-item refutation ── a separate model attacks the panel's consensus
-             │
-             ▼
-   ┌── three code gates, all must exit 0 ─────────────┐
-   │  render_gate     dossier structure + jargon      │
-   │  qverify         every quote is verbatim         │
-   │  render_dossier  single-file HTML                │
-   └──────────────────────────────────────────────────┘
-             │
-             ▼
-       dossier §0–§7
-```
 
 ## Configuration
 
