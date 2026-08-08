@@ -135,13 +135,19 @@ rather than hurts: a polite human advisor hedges; a lens has no reputation to pr
 refute the consensus, item by item. Unanimity is usually an echo of the prompt, not
 signal. The refuter exists to find the case where the whole board is wrong together.
 
-**7. Quotes verified by code — the 18-of-35 problem.** While building this, I checked a
-finished dossier against the raw panel outputs: **18 of 35 quotes had been silently
-altered** — trims, splices, one entire sentence nobody ever said. None of it intentional:
-a model paraphrases what it read and hands it back inside quotation marks. So `qverify`
-matches every attributed quote against the raw cell of that specific advisor — verbatim,
-segments in order, within a single cell — and rejects the dossier otherwise. A real
-sentence attributed to the wrong advisor fails too.
+**7. You cannot proofread this. The 18-of-35 problem.** A finished dossier of mine —
+reviewed, ready to circulate — went through the quote checker for the first time. **Of 35
+attributed quotes, 18 did not survive verbatim matching**: the synthesis editor had trimmed
+and spliced them. One epigraph contained a sentence that **appears in no cell at all**.
+
+None of it was intentional, and none of it was visible. I had read that document. A model
+paraphrases what it read and hands it back inside quotation marks, and the result is
+indistinguishable from a real citation — which is exactly what it will look like to whoever
+receives the PDF, with `— **Name**` underneath.
+
+Reading harder does not fix this. So `qverify` matches every attributed quote against the
+raw cell of that specific advisor — verbatim, segments in order, within a single cell — and
+rejects the dossier otherwise. A real sentence attributed to the wrong advisor fails too.
 
 ## What comes back
 
