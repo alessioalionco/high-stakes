@@ -101,7 +101,7 @@ should be presented as if it worked.
 | Delta between rounds | compare round N with N−1 (resolved / new / reappeared) | write the delta by hand, or declare there is none |
 | Prediction ledger | accumulate micro-predictions × real outcome over months | record the falsifier on each card; the ledger accumulates once there is an outcome |
 | Persona grounding | anchor each lens in that advisor's real material | run without grounding and say you ran without |
-| Resuming an interrupted run | checkpoint / resume / idempotency | restart the round |
+| Resuming an interrupted **run** (the orchestration) | pick the gated flow back up where it stopped — Gate A, Gate B, panel, refutation, render | restart the round. The PAID part is not lost: `cells.py` skips any cell already on disk whose `input_hash` and `prompt_version` match, so a re-run re-dispatches only what is missing. What is missing is the orchestration state, not the money |
 | Adapter for a 2nd harness | run outside this environment | the core/adapter boundary is ready; the adapter is missing |
 | No-retention routing | send sensitive material only to a provider with a no-retention policy | pick the provider by hand before the run, or do not send the excerpt — the engine checks nobody's retention policy |
 | Source self-verification | open each cited source, confirm it supports the claim, discard the dead/fabricated ones and find a substitute | check the sources by hand; what the engine does today is COLLECT the citation and classify the domain by tier, not verify that the source supports what was said |

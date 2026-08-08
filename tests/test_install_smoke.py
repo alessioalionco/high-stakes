@@ -211,8 +211,24 @@ def main() -> int:
         r = run("config")
         case("`config` runs without a created HOME and without a key, and WARNS the key is missing",
              r.returncode == 0 and "MISSING" in r.stdout, r.stderr[-200:])
+        # Assert the value of the `boards_dir` LINE, not a substring of the whole blob.
+        # Two ways this case was wrong before, both of which made it pass for reasons
+        # unrelated to what it claims to check:
+        #   1. it looked for "high-stakes/boards" anywhere in the output, so it only
+        #      passed when the repo happened to sit in a directory named `high-stakes`.
+        #      Clone it as anything else and the suite went red on a good install. CI
+        #      never saw it — actions/checkout always names the directory after the repo.
+        #   2. the obvious repair (SHIPPED_BOARDS anywhere in stdout) is ALSO wrong: the
+        #      `pin_path` line contains the shipped boards directory too, so breaking the
+        #      boards_dir fallback outright still left the case green. Caught by mutation.
+        # Parsing the one line is what actually ties the assertion to the behaviour.
+        from high_stakes import paths as _paths  # noqa: PLC0415 — local by design (see above)
+        _boards_line = next((l.split(":", 1)[1].strip()
+                             for l in r.stdout.splitlines()
+                             if l.startswith("boards_dir")), None)
         case("`config` falls back to the shipped boards when the user has none",
-             "high-stakes/boards" in r.stdout.replace(os.sep, "/"), r.stdout[-200:])
+             _boards_line == str(_paths.SHIPPED_BOARDS),
+             f"boards_dir line = {_boards_line!r}, expected {str(_paths.SHIPPED_BOARDS)!r}")
 
         # ---- the gate and the render, end to end, over the example ----
         r = run("render_gate", str(ROOT / "examples" / "sample-dossier.md"))
