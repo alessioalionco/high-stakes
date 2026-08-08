@@ -149,6 +149,39 @@ Reading harder does not fix this. So `qverify` matches every attributed quote ag
 raw cell of that specific advisor — verbatim, segments in order, within a single cell — and
 rejects the dossier otherwise. A real sentence attributed to the wrong advisor fails too.
 
+## What is table stakes here, and what isn't
+
+A council of AI advisors is not a new or rare idea. Ask several models the same question,
+keep them from seeing each other's answers, have a chairman synthesize: that pattern is
+well travelled and there are good, lighter implementations of it. If that is what you
+need, use one of those.
+
+Four things that look like the differentiator, and are not — treat them as the price of
+entry, because everyone in this category already has them:
+
+- **Several models, several vendors.** Standard.
+- **A blind first round.** Standard.
+- **Named advisors with distinct expertise.** Standard.
+- **A chairman that synthesizes.** Standard. It is the original shape of the pattern.
+
+What I looked for in the alternatives and could not find:
+
+- **Quotes verified by code.** Every attributed quote matched against the raw output of
+  that specific advisor, or the dossier is rejected. The category has this exposure — the
+  synthesis step paraphrases — and I could not find a project that checks.
+- **A spending cap that reserves before it dispatches**, with accounting on disk that holds
+  across processes. Cost *reporting* after the fact is common. Refusing the call is not.
+- **Gates that fail closed.** Three of them, each exiting non-zero. Not schema validation
+  that trusts the model to comply — a gate that stops delivery.
+- **No rounds at all.** Most implementations do blind-then-peer-review. Here divergence is
+  the product, so nothing converges the panel after the fact. Convergence only counts as
+  signal when it was independent.
+
+The line those three sit on: they matter when the output **leaves your machine as an
+artifact** — a PDF in a board pack, with a real person's name under a quote. If the answer
+stays in your terminal, you do not need any of it, and something lighter will serve you
+better.
+
 ## What comes back
 
 A dossier (§0–§7, structure enforced by a code gate), organized by what actually matters
