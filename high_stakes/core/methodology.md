@@ -36,7 +36,7 @@ the corresponding section — do not work from memory.** The sections:
 ## When to activate
 - **Explicit trigger:** "enter high stakes mode", "high stakes mode", "high stakes".
 - **Auto-suggest** (ask before turning on) when ALL THREE triggers hit:
-  1. **High stakes** — it goes outside (investor, board, client) or is expensive to redo.
+  1. **High stakes** — it goes outside (investor, board, client) or is expensive to get wrong.
   2. **Real ambiguity** — several valid interpretations, taste-driven.
   3. **Context in the decider's head** — cannot be inferred from the available material.
 

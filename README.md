@@ -1,21 +1,30 @@
 # high-stakes
 
-A virtual board of experts for decisions that are expensive to redo.
+A virtual board of experts for decisions too important to make alone.
 
 ## The idea
 
-Nobody serious makes a high-stakes decision alone. Companies answer to boards. Medicine
-runs on second opinions — doctors with different training and different protocols looking
-at the same case. Products have customer advisory boards; careers have mentors. The
-pattern shows up everywhere because it works: decision quality goes up when independent
-perspectives with different backgrounds attack the same problem.
+Nobody serious makes a high-stakes decision alone — and yet most of us do, most of the
+time. For the rare, enormous calls (selling, raising, merging) there is a board: people
+with training different from yours, looking at the same problem, obliged to disagree with
+you on the record. For the big decisions you make every week — what to cut from this deck,
+how to position the new tier, which narrative to take into the customer meeting, whether to
+kill the product line — you decide alone, or with whoever already agrees with you, because
+they are the ones nearby. It is not for lack of knowing better. You cannot convene five
+good people every Tuesday.
+
+The pattern is not specific to boards. Medicine runs on second opinions — doctors with
+different training and different protocols looking at the same case. Products have customer
+advisory boards; careers have mentors. It shows up everywhere because it works: decision
+quality goes up when independent perspectives with different backgrounds attack the same
+problem.
 
 Multi-model adversarial review already proved the pattern transfers to AI — code reviewed
 by several models from different vendors catches what any single model misses.
 high-stakes applies it to decisions.
 
-You bring the question — a board deck, a positioning narrative, a strategic call,
-something that ships to the outside world and cannot be unshipped. The engine **builds
+You bring the question — something that ships to the outside world and cannot be
+unshipped. The engine **builds
 the board for your problem**: it classifies what kind of panel the decision needs, maps
 what must be covered, and proposes one seat per axis, which you ratify or swap. Each seat
 is a lens on one way the decision can fail, and each lens runs on a different model family.
@@ -220,8 +229,8 @@ in a board's output:
 
 You need all of these at once:
 
-- a decision that **ships externally** and is expensive to redo (board deck, positioning,
-  fundraise narrative) — for anything else, this is overkill;
+- a decision that **ships externally** and is expensive to get wrong (board deck,
+  positioning, fundraise narrative) — for anything else, this is overkill;
 - **Claude Code** and Python 3.11+;
 - an **OpenRouter** key with credit, and willingness to spend per decision (the real cost
   of your case shows up in preflight, before anything is dispatched — don't trust a fixed

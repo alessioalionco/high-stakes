@@ -1,6 +1,6 @@
 ---
 name: high-stakes
-description: "High Stakes mode: a rigor engine for high-stakes, ambiguous DECISIONS (deck/slide for an investor, board, or client; narrative; positioning; strategic decision). Refines the ask with a pre-filled brief, grounds the inputs in truth, runs a blind adversarial panel (personas × models from different families) over counterfactual scenarios, refutes its own consensus, and returns a dossier with code-verified quotes. Use when the user says 'enter high stakes mode', 'high stakes mode', 'high stakes', or asks for an artifact/decision that goes out the door and is expensive to redo."
+description: "High Stakes mode: a rigor engine for high-stakes, ambiguous DECISIONS (deck/slide for an investor, board, or client; narrative; positioning; strategic decision). Refines the ask with a pre-filled brief, grounds the inputs in truth, runs a blind adversarial panel (personas × models from different families) over counterfactual scenarios, refutes its own consensus, and returns a dossier with code-verified quotes. Use when the user says 'enter high stakes mode', 'high stakes mode', 'high stakes', or asks for an artifact/decision that goes out the door and is expensive to get wrong."
 ---
 
 # High Stakes mode — adapter
@@ -67,7 +67,7 @@ bin/high-stakes paths examples  # the reference dossier that rule R1 says to ope
 
 - **Explicit trigger:** "enter high stakes mode", "high stakes mode", "high stakes".
 - **Auto-suggest** (asking first) only when ALL THREE hold: high stakes (it goes out
-  the door or is expensive to redo) · genuine ambiguity (a matter of taste/judgment, not
+  the door or is expensive to get wrong) · genuine ambiguity (a matter of taste/judgment, not
   fact) · context that lives in the user's head and cannot be inferred from the repository.
 - **Do NOT activate → redirect:** mechanical or low-risk task → execute directly with
   defaults and show the assumption · code, build, or config → the normal engineering

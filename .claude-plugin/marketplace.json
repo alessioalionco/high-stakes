@@ -1,6 +1,6 @@
 {
   "name": "high-stakes",
-  "description": "A rigor engine for decisions that are expensive to redo: blind adversarial panel, consensus refutation, code-verified quotes.",
+  "description": "A rigor engine for decisions too important to make alone: blind adversarial panel, consensus refutation, code-verified quotes.",
   "owner": {
     "name": "Alessio Alionco",
     "url": "https://github.com/alessioalionco"
