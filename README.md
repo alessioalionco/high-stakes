@@ -156,28 +156,41 @@ keep them from seeing each other's answers, have a chairman synthesize: that pat
 well travelled and there are good, lighter implementations of it. If that is what you
 need, use one of those.
 
-Four things that look like the differentiator, and are not — treat them as the price of
-entry, because everyone in this category already has them:
+Five things that look like the differentiator, and are not — treat them as the price of
+entry, because the category already has them:
 
 - **Several models, several vendors.** Standard.
 - **A blind first round.** Standard.
 - **Named advisors with distinct expertise.** Standard.
 - **A chairman that synthesizes.** Standard. It is the original shape of the pattern.
+- **Interrogating you before it runs.** Refining the ask into a brief with clarifying
+  questions feels like a differentiator and is not — at least one council tool ships
+  mandatory intake. What follows the questions is where this diverges.
 
 What I looked for in the alternatives and could not find:
 
 - **Quotes verified by code.** Every attributed quote matched against the raw output of
   that specific advisor, or the dossier is rejected. The category has this exposure — the
   synthesis step paraphrases — and I could not find a project that checks.
+- **One evidence pack, identical for every seat.** Research runs once, before the panel,
+  and the material enters every cell as a byte-identical prefix, with each source
+  classified by trust tier (primary > analyst > press > vendor blog). Per-model web search
+  is common; the board arguing over the *same* grounded material, rather than over what
+  each model happens to remember, is what this buys.
+- **Nothing is dispatched before you approve the cost.** Gate B shows the sharpened brief,
+  the proposed board and the estimated spend, and waits. Cost *reporting* after the run is
+  common. A checkpoint before the first paid call is not.
 - **A spending cap that reserves before it dispatches**, with accounting on disk that holds
-  across processes. Cost *reporting* after the fact is common. Refusing the call is not.
+  across processes, so two terminals on the same decision do not each get the full budget.
 - **Gates that fail closed.** Three of them, each exiting non-zero. Not schema validation
   that trusts the model to comply — a gate that stops delivery.
-- **No rounds at all.** Most implementations do blind-then-peer-review. Here divergence is
-  the product, so nothing converges the panel after the fact. Convergence only counts as
-  signal when it was independent.
 
-The line those three sit on: they matter when the output **leaves your machine as an
+One more difference that is a stance rather than a feature: **there are no rounds at all.**
+Most implementations do blind-then-peer-review. Here divergence is the product, so nothing
+converges the panel after the fact — convergence only counts as signal when it was
+independent.
+
+The line all of that sits on: it matters when the output **leaves your machine as an
 artifact** — a PDF in a board pack, with a real person's name under a quote. If the answer
 stays in your terminal, you do not need any of it, and something lighter will serve you
 better.
