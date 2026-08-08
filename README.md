@@ -57,7 +57,7 @@ method with the most thought in it:
 - **Boards die with the decision; lenses persist.** A board is frozen while a decision
   loops (swapping a seat mid-loop breaks the round-to-round comparison) and born fresh
   for the next one. The lenses you build get saved to your pool
-  (`~/.high-stakes/boards`) for reuse. The shipped SaaS board is a starter, not the
+  (`~/.high-stakes/boards`) for reuse. The shipped SaaS pool is a starter, not the
   product.
 
 ## Why this beats pasting the same prompt into a chat
@@ -69,7 +69,7 @@ know of." Here is what that doesn't get you, and what this engine was built for:
 get the center of its training distribution — the most popular answer, smoothed. But
 there are many ways to get from A to B: you can lose weight with more exercise, a
 ketogenic diet, or medication, and each is a different protocol with different costs and
-failure modes. Their average is not a protocol. A named lens with a defined axis
+failure modes. Their average is not a protocol. A lens with a defined axis
 pulls the model out of the average and into one way of thinking — a CEO asking "a CEO"
 for feedback gets generic advice; a board seating the world's sharpest CFO, CTO, and CMO
 answers the same question three different ways. Convergence across seats validates the
@@ -294,8 +294,8 @@ The zero-dependency promise is **checked by AST** on every suite run, not truste
 
 The engine is specified by contracts in `high_stakes/core/`, and not everything specified
 is built. The list lives in **`core/execution.md`**, in the table at the end, with what
-to do while each thing doesn't exist. Today it includes: grounding each lens in that
-person's actual published material (today the lens runs on what the model already knows),
+to do while each thing doesn't exist. Today it includes: grounding a lens in the actual
+published material behind it (today the lens runs on what the model already knows),
 routing to no-retention providers, automatic verification that a cited source supports
 the claim, aborting when fewer than 3 model families are alive, and enforcement of
 brand-blinding in the judgment view.
