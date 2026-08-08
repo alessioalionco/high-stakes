@@ -63,8 +63,7 @@ method with the most thought in it:
 ## Why this beats pasting the same prompt into a chat
 
 You could ask your favorite model to "act as a board of the three sharpest investors you
-know of." Here
-is what that doesn't get you, and what this engine was built for:
+know of." Here is what that doesn't get you, and what this engine was built for:
 
 **1. One model, one prompt, gets you the average.** Ask an LLM for an opinion and you
 get the center of its training distribution — the most popular answer, smoothed. But
