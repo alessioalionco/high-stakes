@@ -332,9 +332,11 @@ on failure.
 for t in tests/test_*.py; do python3 -m "tests.$(basename "$t" .py)" || exit 1; done
 ```
 
-**339 tests across 12 suites — all 12 modules covered.** The money path (per-run cap,
+**401 tests across 14 suites — all 15 modules covered.** The money path (per-run cap,
 conservative charging on post-dispatch failure, a non-finite number from a provider
-cannot disable the cap), the parallel dispatcher (a failing cell doesn't vanish,
+cannot disable the cap), the flow gate (a decision-run panel cannot fire without its
+evidence pack consumed by every cell — blocked with zero dispatches and $0 spent),
+the parallel dispatcher (a failing cell doesn't vanish,
 duplicate ids blocked before spend, resume keyed by input hash, judge isolation), reuse
 containment (no reads outside the run directory, symlinks included), quote verification
 (a fabricated quote next to a real one does not pass), domain blocklist, config
