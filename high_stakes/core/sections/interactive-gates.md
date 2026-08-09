@@ -47,13 +47,28 @@ ONE message with the complete picture, everything correctable, nothing re-asked:
   > (b) the estimated amount [range] (c) the dimension that weighs most in this case [1-5]. Any
   > rule to add or remove?"*
 - 🤖 **PIN roster** (see "Pinned roster" below): 1 confirmation line, not a research project.
-- 💰 **Estimated cost** (formula in `core/execution.md`; passes the cap → stop and ask; below
-  → inform) + egress policy (1 line).
+- 💰 **Estimated cost DERIVED FROM THE CONTRACT, not from memory** [flow gate]: the adapter runs
+  the executable checklist (`python3 -m high_stakes.gate_b_check <manifest.yaml>`) and PASTES its
+  output into the gate — the flow steps and the mandatory cost components come from code; the
+  model fills in the NUMBERS over code-emitted lines, never composes the list from memory (that
+  is exactly how a step ends up silently missing from the cost). Formula in `core/execution.md`;
+  passes the cap → stop and ask; below → inform. + egress policy (1 line).
 - 📁 **Where it writes** (layout in `core/sections/run-persistence.md`).
+- 🔒 **Machine-readable fields in the manifest (the flow gate's contract):** at the GO, the
+  adapter writes what Gate B ratified at the top of `manifest.yaml` (column 0):
+  `preset: quick|full` · `domain_new: true|false` · `pool: <name>` (if any) ·
+  `research: full|waived` (a waiver is a DECLARED decision by the decider, never a default).
+  These are the fields the code gate reads before releasing the panel — Gate B without them =
+  panel blocked (fail closed).
 - Actions: `1 Run · 2 Adjust (say what) · 3 See full charter`.
 
 After the GO: research (if any) + panel + refutation + synthesis + code-verified render — no more stops;
-the dossier arrives ready. **Board formed from scratch and accepted → 1 line after the GO:** `1 Save as
+the dossier arrives ready. **The GO→execution hand-off is GATED BY CODE** (the flow gate in the
+cell runner, automatic): the panel only fires with an evidence pack that exists, is intact
+(write_pack receipt, matching sha, ≥1 successful ask), is CONSUMED in every cell's prompt, and —
+on full + new domain without a pool — with an executed pre-pass (≥1 ok cell). After the GO,
+transcribe the `gate_b_check` checklist into the run README's journal; strike an item only when
+its artifact exists on disk. **Board formed from scratch and accepted → 1 line after the GO:** `1 Save as
 pool · 2 This time only` (the library of lenses accumulates; the adapter writes it in the house format).
 
 ## RECURRING FLOW (a problem already worked) — 1 gate

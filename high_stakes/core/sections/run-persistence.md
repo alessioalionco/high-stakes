@@ -28,8 +28,14 @@ default is `./high-stakes-runs/`, relative to the directory the engine was calle
   inputs/            # GITIGNORED (sensitive) — raw assets + extraction MDs
     MANIFEST.md      # TRACKED: sha256 + origin + backup path (Drive) of each asset
   research/          # deep research — TRACKED (external source, non-sensitive by nature)
+    evidence-pack.md   # raw material, identical for every cell
+    flow-receipt.json  # emitted by write_pack: pack sha256 + ok/failed ask counts — the
+                       # flow gate validates it BEFORE releasing the panel (INTEGRITY: a
+                       # pack edited after assembly fails; this is not proof of authorship)
   rounds/
     r1/
+      pack.sha256    # round pin: the first dispatch freezes the pack sha; the pack cannot
+                     # change mid-round (new evidence = new round)
       cells/         # FULL LOG — full text per cell + the Chairman's working material
       cards/         # structured SoR (dual-emit)
       report.md      # the dossier's SoR

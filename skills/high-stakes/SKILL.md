@@ -75,6 +75,20 @@ bin/high-stakes paths examples  # the reference dossier that rule R1 says to ope
 
 ## Guardrails
 
+### The GO→execution hand-off goes through a code gate (flow gate)
+
+The cell runner (`high_stakes/cells.py`) arms `high_stakes/flow_gate.py` automatically on a
+decision run's panel dispatch (`rounds/rN/cells` under a run with `manifest.yaml`): it requires
+the evidence pack + the `write_pack` receipt (sha, ≥1 successful ask) + the pack in EVERY cell's
+prompt + an ok pre-pass when the preset is full + new domain without a pool. **Adapter
+obligations:** (a) at the GO, write the Gate B fields into the manifest (`preset` ·
+`domain_new` · `pool` · `research` — see `core/sections/interactive-gates.md` §Gate B); (b)
+assemble the Gate B cost by PASTING the output of `python3 -m high_stakes.gate_b_check
+<manifest.yaml>` (the checklist derives from the contract, never from memory; `--cost-lines`
+verifies coverage, exit 0 required); (c) after the GO, transcribe the checklist into the run
+README's journal and strike an item only when its artifact exists on disk. Legacy run: the gate's
+error message says how to migrate (two manifest lines).
+
 ### The dossier render goes through code gates
 
 The rules live in the core (`sections/output-contract.md`, render-gate section) and must
