@@ -6,6 +6,7 @@ from datetime import date
 from pathlib import Path
 
 from high_stakes import config as hs_config
+from high_stakes import paths as _paths
 from high_stakes.quick_panel import (DEFAULT_PIN, MATERIAL_HEADER, build_quick_tasks, load_pin,
                          pin_expired)
 
@@ -91,8 +92,13 @@ def main() -> int:
                  pin_expired({"ttl_days": 30}) is True),
             case("an unreadable ttl counts as EXPIRED",
                  pin_expired({"pinned": "2026-01-01", "ttl_days": "x"}) is True),
+            # The SHIPPED pin, addressed as shipped. `hs_config.pin_path()` resolves the
+            # USER's pin when they have one, so this case was asserting "the operator's
+            # roster is expired" — true only for an operator with no roster. It went red
+            # the day the author configured his own, which is the day the suite started
+            # telling the truth about what it measures.
             case("the pin SHIPPED with the install loads and is evaluable without crashing",
-                 pin_expired(load_pin(hs_config.pin_path())) is True),
+                 pin_expired(load_pin(_paths.SHIPPED_BOARDS / "roster-pin.yaml")) is True),
         ]
         # ATTENTION, whoever adds a test below this point: `results` above is a LITERAL
         # LIST. A stray `case(...)` after it PRINTS PASS/FAIL but enters neither the

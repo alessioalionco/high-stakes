@@ -26,11 +26,18 @@ DEFAULTS: dict[str, Any] = {
     "concurrency": 8,                    # simultaneous cells
     "timeout_s": 1200,                   # per call
     "on_model_unavailable": "abort",     # "abort" | "skip-cell" (declared in the dossier)
+    "require_build_check": False,        # opt-in: refuse a paid dispatch on an unvouched build
 }
 
 _INT_KEYS = {"concurrency", "timeout_s"}
 _FLOAT_KEYS = {"cap_usd"}
+_BOOL_KEYS = {"require_build_check"}
 _ENUMS = {"on_model_unavailable": {"abort", "skip-cell"}}
+
+# TOML gives a native bool; the env var arrives as a string. Both spellings coerce here so
+# `HIGH_STAKES_REQUIRE_BUILD_CHECK=true` and `require_build_check = true` mean the same thing.
+_TRUE = {"1", "true", "yes", "on"}
+_FALSE = {"0", "false", "no", "off", ""}
 
 CONFIG_NAME = "config.toml"
 LOCAL_CONFIG = ".high-stakes.toml"
@@ -60,6 +67,16 @@ def _coerce(key: str, value: Any) -> Any:
         return int(value)
     if key in _FLOAT_KEYS:
         return float(value)
+    if key in _BOOL_KEYS:
+        if isinstance(value, bool):
+            return value
+        s = str(value).strip().lower()
+        if s in _TRUE:
+            return True
+        if s in _FALSE:
+            return False
+        # a value nobody can read must not quietly become "off": this key GATES spending
+        raise ValueError(f"{key}={value!r} is not a boolean (use true/false, 1/0, yes/no)")
     if key in _ENUMS and str(value) not in _ENUMS[key]:
         raise ValueError(f"{key}={value!r} is invalid (use one of {sorted(_ENUMS[key])})")
     return value
@@ -115,7 +132,8 @@ def main(argv: list[str]) -> int:
     print(f"boards_dir       : {boards_dir(cfg)}")
     print(f"pin_path         : {pin_path(cfg)}")
     print(f"runs_dir         : {runs_dir(cfg)}")
-    for k in ("cap_usd", "concurrency", "timeout_s", "on_model_unavailable"):
+    for k in ("cap_usd", "concurrency", "timeout_s", "on_model_unavailable",
+              "require_build_check"):
         print(f"{k:<17}: {cfg[k]}")
     key = "set" if os.environ.get("OPENROUTER_API_KEY") else "MISSING"
     print(f"OPENROUTER_API_KEY: {key} (env — never in the config)")

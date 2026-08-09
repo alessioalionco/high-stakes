@@ -34,6 +34,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from .build_gate import check_build
 from .flow_gate import check_flow
 from .naming import SAFE_FILENAME
 from .or_client import SchemaInvalid
@@ -234,8 +235,13 @@ def run_cells(client, tasks: list[dict], out_dir: Path,
     The flow gate (GO→execution) runs BEFORE any paid call: a decision-run panel
     dispatch without a consumed evidence pack (+ pre-pass when the preset requires
     it) raises FlowGateError — fail closed, $0 spent. Experiments and other stages
-    (pre-pass, refuter) pass untouched (the predicate is the disk-layout position)."""
+    (pre-pass, refuter) pass untouched (the predicate is the disk-layout position).
+
+    The build gate runs FIRST and ONCE per dispatch: it is a no-op unless the config
+    opts in, and it precedes check_flow so a refused build never leaves the round pin
+    frozen behind it. Not in run_cell — that one runs per cell under the pool."""
     _check_unique(tasks)
+    check_build()
     check_flow(Path(out_dir), tasks)
     out_dir.mkdir(parents=True, exist_ok=True)
     if not quiet:

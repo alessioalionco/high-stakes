@@ -99,6 +99,35 @@ def main() -> int:
             case(f"malformed attestation {bad!r} -> refuses (fails closed)",
                  raised is not None)
 
+        # ── a malformed config must NOT silently disable the gate ─────────────
+        # The bad version of this catches everything on config load and returns
+        # "not opted in". Then a typo in the config switches the gate off for the one
+        # person who asked for it, and they never find out. config.load() already
+        # treats an unreadable config as fatal; this must not contradict it.
+        broken = tmp / "broken-home"
+        broken.mkdir()
+        (broken / "config.toml").write_text("require_build_check = true\nthis is not toml [[[\n")
+        r = subprocess.run(
+            [sys.executable, "-c",
+             "from high_stakes.build_gate import check_build; check_build()"],
+            cwd=str(tmp), capture_output=True, text=True,
+            env=dict(os.environ, HIGH_STAKES_HOME=str(broken), PYTHONPATH=str(ROOT)))
+        case("malformed config RAISES instead of silently disabling the gate",
+             r.returncode != 0)
+        case("and the error names the config, not the attestation",
+             "config" in (r.stdout + r.stderr).lower())
+
+        # an ABSENT config is not an error — the no-opt-in majority is untouched
+        empty = tmp / "empty-home"
+        empty.mkdir()
+        r = subprocess.run(
+            [sys.executable, "-c",
+             "from high_stakes.build_gate import check_build; check_build()"],
+            cwd=str(tmp), capture_output=True, text=True,
+            env=dict(os.environ, HIGH_STAKES_HOME=str(empty), PYTHONPATH=str(ROOT)))
+        case("absent config is a clean no-op (nobody else is affected)",
+             r.returncode == 0)
+
         # ── the gate is actually WIRED into the paid dispatch ─────────────────
         # A gate nobody calls is documentation. This is the part that matters.
         src = (ROOT / "high_stakes" / "cells.py").read_text()

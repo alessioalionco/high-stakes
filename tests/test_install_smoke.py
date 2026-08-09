@@ -55,6 +55,14 @@ def main() -> int:
            if not k.startswith("HIGH_STAKES_")
            and k not in ("OPENROUTER_API_KEY", "PYTHONPATH")}
     env["PYTHONDONTWRITEBYTECODE"] = "1"
+    # Stripping HIGH_STAKES_* is NOT enough to make "the user has none" true: with no
+    # HIGH_STAKES_HOME set, `config.home()` resolves to the REAL ~/.high-stakes, so the
+    # author's own config decides what this suite observes. The fallback cases below
+    # passed only because the author happened to have no config; the first person to
+    # write one — the author, dogfooding his own plugin — turned them red. Point HOME at
+    # an empty directory so the default path is actually the path under test.
+    _EMPTY_HOME = Path(tempfile.mkdtemp(prefix="hs-empty-home-"))
+    env["HIGH_STAKES_HOME"] = str(_EMPTY_HOME)
     LAUNCHER = str(ROOT / "bin" / "high-stakes")
 
     tmp = Path(tempfile.mkdtemp())  # a cwd that is NOT the repo
