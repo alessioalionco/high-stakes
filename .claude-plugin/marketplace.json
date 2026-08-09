@@ -10,7 +10,7 @@
       "name": "high-stakes",
       "source": "./",
       "description": "A rigor engine for high-stakes, ambiguous decisions: refines the ask, runs a blind adversarial panel (personas \u00d7 models from different families), refutes the consensus, and returns a dossier where every quote is verified by code.",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "author": {
         "name": "Alessio Alionco"
       },
