@@ -48,11 +48,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-_SAFE_FILENAME = re.compile(r"[^A-Za-z0-9._@-]+")  # same rule as engine.cells
+from .flow_gate import RECEIPT_FILENAME
+from .naming import SAFE_FILENAME as _SAFE_FILENAME
+
 
 # trust hierarchy by domain (primary > analyst > press > vendor/blog)
 _TIER_RULES = [
@@ -200,6 +201,9 @@ def load_reuse(ask: dict, base_dir: Path, domain_blocklist: list[str] | None = N
         "nature": ask.get("nature"),
         "query": "(reuse of local material — no new call)",
         "answer": body or "(reuse material not found)",
+        # missing material = FAILED ask (declared gap in the pack + outside the
+        # receipt's asks_ok) — a placeholder must not count as grounded evidence.
+        "failed": not body,
         "citations": [{"url": str(reuse_dir), "tier": "medium", "blocked": False}],
         # reused material is content like any other: if it cites a blocked domain, it is
         # suspect. It used to be a fixed False, contradicting the module's contract.
@@ -234,6 +238,11 @@ def run_asks(client, asks: list[dict], *, evidence_model: str,
             except json.JSONDecodeError:
                 print(f"[cache] {ask['id']}: cache CORRUPTED — re-fetching.")
                 item = None
+            if item is not None and not (item.get("answer") or "").strip():
+                # read-guard: cache poisoned by an empty answer (a dead research leg
+                # cached as valid) — re-fetch instead of re-serving the defect.
+                print(f"[cache] {ask['id']}: cached answer is EMPTY — re-fetching.")
+                item = None
             if item is not None:
                 # re-applies the CURRENT blocklist to what came from the cache
                 for c in item.get("citations", []):
@@ -251,6 +260,15 @@ def run_asks(client, asks: list[dict], *, evidence_model: str,
         print(f"        cost ${item['cost_usd']:.4f} · {len(item['citations'])} sources "
               f"· provider {item['provider']}"
               + ("  ⚠️ leak_suspect" if item["leak_suspect"] else ""))
+        if not (item.get("answer") or "").strip():
+            # write-guard: an empty answer NEVER becomes cache (a re-run would
+            # cache-hit the defect). The item stays in the list FLAGGED — write_pack
+            # declares the gap.
+            item["failed"] = True
+            print(f"        ⚠️ {ask['id']}: EMPTY answer — not cached; the gap will "
+                  "be DECLARED in the pack.")
+            items.append(item)
+            continue
         cache_dir.mkdir(parents=True, exist_ok=True)
         cached.write_text(json.dumps(item, indent=2))
         items.append(item)
@@ -266,16 +284,38 @@ def write_pack(items: list[dict], pack_path: Path, title: str) -> None:
         "identical for all cells. Low tier does NOT ground a number.\n",
     ]
     total = 0.0
+    asks_ok = asks_failed = 0
     for it in items:
         total += it["cost_usd"]
+        failed = bool(it.get("failed")) or not (it.get("answer") or "").strip()
         lines.append(f"\n## {it['id']}  ·  nature: {it['nature']}")
         lines.append(f"*query:* {it['query']}")
-        lines.append(f"\n{it['answer']}\n")
+        if failed:
+            # a failed ask becomes a DECLARED gap — never a silent empty section
+            # (house kill-switch: an ungrounded number → declared gap, never mute).
+            asks_failed += 1
+            lines.append("\n**⚠️ DECLARED GAP: ask failed — no answer.** This "
+                         "dimension is NOT grounded; the panel must not invent a "
+                         "number here.\n")
+        else:
+            asks_ok += 1
+            lines.append(f"\n{it['answer']}\n")
         if it["citations"]:
             lines.append("**Sources:**")
             for c in it["citations"]:
                 flag = " ⚠️BLOCKED" if c.get("blocked") else ""
                 lines.append(f"- [{c['tier']}]{flag} {c['url']}")
     lines.append(f"\n---\n*total pack cost: ${total:.4f}*")
-    pack_path.write_text("\n".join(lines))
-    print(f"\nevidence-pack written: {pack_path} · total cost ${total:.4f}")
+    text = "\n".join(lines)
+    pack_path.write_text(text)
+    # The receipt is emitted BY CODE on the mandatory assembly path — the flow gate
+    # verifies sha + asks_ok before releasing the panel. No extra runner step.
+    receipt = {
+        "pack_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        "asks_ok": asks_ok,
+        "asks_failed": asks_failed,
+        "generated_utc": datetime.now(timezone.utc).isoformat(),
+    }
+    (pack_path.parent / RECEIPT_FILENAME).write_text(json.dumps(receipt, indent=2))
+    print(f"\nevidence-pack written: {pack_path} · total cost ${total:.4f} "
+          f"· receipt: {asks_ok} ok / {asks_failed} failed")

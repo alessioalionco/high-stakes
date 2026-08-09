@@ -28,13 +28,14 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from .flow_gate import check_flow
+from .naming import SAFE_FILENAME
 from .or_client import SchemaInvalid
 
 DEFAULT_CONCURRENCY = 6
@@ -50,12 +51,10 @@ _ENGINE_KEYS = {
     "_skipped",
 }
 
-_SAFE_FILENAME = re.compile(r"[^A-Za-z0-9._@-]+")
-
 
 def cell_filename(cell_id: str) -> str:
     """Safe/stable filename derived from the cell_id (model slugs contain '/')."""
-    return _SAFE_FILENAME.sub("-", cell_id) + ".json"
+    return SAFE_FILENAME.sub("-", cell_id) + ".json"
 
 
 def write_json_atomic(path: Path, obj: dict) -> None:
@@ -125,7 +124,19 @@ def _reusable(path: Path, input_hash: str, prompt_version: Any) -> dict | None:
 
 
 def run_cell(client, task: dict, out_dir: Path) -> dict:
-    """Runs ONE cell: chat -> parse (1x repair-retry) -> JSON on disk."""
+    """Runs ONE cell: chat -> parse (1x repair-retry) -> JSON on disk.
+
+    Flow-gate ALWAYS (here too, not only in run_cells): run_cell is public and
+    would dispatch directly — the gate's bypass. No-op outside a decision run's
+    panel dispatch."""
+    check_flow(Path(out_dir), [task])
+    return _dispatch_cell(client, task, out_dir)
+
+
+def _dispatch_cell(client, task: dict, out_dir: Path) -> dict:
+    """run_cell's body AFTER the gate. run_cells dispatches through here: the gate
+    already ran once over ALL tasks — re-running it per cell in the pool would mean
+    N+1 pack reads + N pin writes racing across threads (review finding)."""
     cell_id = task["cell_id"]
     model = task["model"]
     messages = task["messages"]
@@ -218,14 +229,21 @@ def run_cells(client, tasks: list[dict], out_dir: Path,
               label: str = "cells", quiet: bool = False) -> list[dict]:
     """Runs the list of cells in parallel (cap `concurrency`). A failure becomes
     status=exception PERSISTED to disk (does not take the others down); a failed
-    cell persists. Duplicate cell_ids/filename collision -> ValueError BEFORE dispatch."""
+    cell persists. Duplicate cell_ids/filename collision -> ValueError BEFORE dispatch.
+
+    The flow gate (GO→execution) runs BEFORE any paid call: a decision-run panel
+    dispatch without a consumed evidence pack (+ pre-pass when the preset requires
+    it) raises FlowGateError — fail closed, $0 spent. Experiments and other stages
+    (pre-pass, refuter) pass untouched (the predicate is the disk-layout position)."""
     _check_unique(tasks)
+    check_flow(Path(out_dir), tasks)
     out_dir.mkdir(parents=True, exist_ok=True)
     if not quiet:
         print(f"[{label}] {len(tasks)} cells (cap {concurrency} concurrent)")
     results: list[dict] = []
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
-        futs = {pool.submit(run_cell, client, t, out_dir): t["cell_id"] for t in tasks}
+        futs = {pool.submit(_dispatch_cell, client, t, out_dir): t["cell_id"]
+                for t in tasks}
         for fut in as_completed(futs):
             cid = futs[fut]
             try:

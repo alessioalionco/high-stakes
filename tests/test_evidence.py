@@ -23,7 +23,8 @@ from pathlib import Path
 
 from high_stakes.evidence import (_cache_filename, body_leak_suspect,
                                   is_blocked_domain, load_reuse, run_asks,
-                                  tier_for)
+                                  tier_for, write_pack)
+from high_stakes.flow_gate import RECEIPT_FILENAME
 
 
 class SpyClient:
@@ -140,6 +141,59 @@ def main() -> int:
         # ---- tier: an unknown domain does not ground a number ----
         case("unknown domain tier is 'low' (conservative)",
              tier_for("https://random-site.xyz/post") == "low")
+
+        # ---- write-guard: an EMPTY answer never becomes cache ----
+        # (real failure class: a dead research leg — $0, 0 sources — cached as a valid
+        # item; every re-run then cache-hits the defect)
+        cache5 = tmp / "c5"
+        spy_empty = SpyClient(text="   ")
+        items = run_asks(spy_empty, [ASK], evidence_model="m", cache_dir=cache5,
+                         base_dir=tmp)
+        case("empty answer comes back FLAGGED failed", items[0].get("failed") is True)
+        case("empty answer is NOT cached", not list(cache5.glob("*.json")))
+        spy_ok = SpyClient(text="good answer")
+        items = run_asks(spy_ok, [ASK], evidence_model="m", cache_dir=cache5,
+                         base_dir=tmp)
+        case("re-run after the failure RE-FETCHES (no cache-hit on the defect)",
+             spy_ok.calls == 1 and items[0]["answer"] == "good answer")
+
+        # ---- read-guard: an ALREADY poisoned cache (empty answer) re-fetches ----
+        cache6 = tmp / "c6"
+        cache6.mkdir(parents=True)
+        poisoned = {"id": ASK["id"], "nature": ASK["nature"], "query": ASK["query"],
+                    "answer": "", "citations": [], "leak_suspect": False,
+                    "cost_usd": 0.0, "provider": "spy", "timestamp": "t"}
+        (cache6 / _cache_filename(ASK, "m", None)).write_text(json.dumps(poisoned))
+        spy_cure = SpyClient(text="cured answer")
+        items = run_asks(spy_cure, [ASK], evidence_model="m", cache_dir=cache6,
+                         base_dir=tmp)
+        case("poisoned cache (empty answer) re-fetches on read",
+             spy_cure.calls == 1 and items[0]["answer"] == "cured answer")
+
+        # ---- reuse with MISSING material = failed ask (not counted ok in receipt) ----
+        missing = load_reuse({"id": "r1", "nature": "public",
+                              "reuse": "dir-that-does-not-exist"}, tmp)
+        case("reuse without material comes FLAGGED failed (a placeholder is not evidence)",
+             missing.get("failed") is True)
+
+        # ---- write_pack: declared gap + receipt with sha and counts ----
+        import hashlib
+        pack_dir = tmp / "run" / "research"
+        pack_path = pack_dir / "evidence-pack.md"
+        ok_item = {"id": "ok1", "nature": "public", "query": "q1",
+                   "answer": "grounded datum", "citations": [], "cost_usd": 0.01}
+        bad_item = {"id": "bad1", "nature": "public", "query": "q2",
+                    "answer": "", "failed": True, "citations": [], "cost_usd": 0.0}
+        write_pack([ok_item, bad_item], pack_path, "test pack")
+        pack_text = pack_path.read_text()
+        case("a failed ask becomes a DECLARED GAP in the pack (never a silent hole)",
+             "DECLARED GAP" in pack_text and "bad1" in pack_text)
+        receipt = json.loads((pack_dir / RECEIPT_FILENAME).read_text())
+        case("write_pack emits the receipt with the right counts",
+             receipt["asks_ok"] == 1 and receipt["asks_failed"] == 1)
+        case("the receipt sha matches the pack on disk",
+             receipt["pack_sha256"]
+             == hashlib.sha256(pack_text.encode("utf-8")).hexdigest())
 
         print(f"{sum(results)}/{len(results)} tests ok")
         return 0 if all(results) else 1
