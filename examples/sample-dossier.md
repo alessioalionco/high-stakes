@@ -1,4 +1,5 @@
 # Meridian — move from per-seat pricing to hybrid in the coming renewal cycle?
+contract: 2
 
 > **Synthetic example.** The company, numbers, advisors, and quotes are invented to
 > demonstrate the format. The advisors are **fictional archetypes** on purpose: a public
@@ -68,13 +69,27 @@ agreeing can be a single error repeated three times.
 
 ## §1 Convergent points
 
-### 1.1 Per-seat pricing is already misaligned with value delivery
+Weight counts DISTINCT lenses, never cells: four models of the same lens are one lens, not
+four votes.
+
+| Finding | Margin Operator | Customer Advocate | Category Strategist | Financial Skeptic | Weight |
+|---|---|---|---|---|---|
+| 1.1 Pricing already misaligned | ✓ | ✓ | ✓ | ✓ | 4/4 |
+| 1.2 The deadline is the risk | ✓ | ✓ | ✓ | · | 3/4 |
+| 1.3 No consumption floor | ✓ | ✓ | · | ✓ | 3/4 |
+
+⚠️ Convergence is weight of attention, not proof. Similar models err together, and the gold
+usually sits in the unique views of §3.
+
+### 1.1 Per-seat pricing is already misaligned with value delivery {chip:telemetry, days} {chip:refuter sustained}
 
 All four lenses reached the same diagnosis by different routes, which is the kind of
 convergence worth more: not the same chain of reasoning repeated, but independent chains
 ending in the same place. The damage mechanism is direct — cost to serve grows with
 documents processed, revenue grows with seats filled, and the two curves came apart when
 automated extraction started replacing human work instead of assisting it.
+
+**Weight:** 4/4 lenses
 
 > "You're charging for the seat in a product the customer bought precisely so they'd need
 > fewer people in seats. That's not a pricing problem, it's a contradiction in the
@@ -84,12 +99,14 @@ has the processed-documents telemetry and the contract base; crossing the two an
 whether the decoupling is theoretical or already hitting margin. Two lenses noted that
 this check should precede any decision, and that it costs days, not quarters.
 
-### 1.2 The 90-day deadline is the dominant risk, not the change
+### 1.2 The 90-day deadline is the dominant risk, not the change {chip:refuter sustained}
 
 Three lenses treated the timeline as the real object of the decision. The shared argument:
 a pricing-model change does not fail by being wrong, it fails by being communicated badly,
 and 90 days is not enough time to discover the communication is bad before it reaches the
 entire base.
+
+**Weight:** 3/4 lenses
 
 > "A price change doesn't die in the spreadsheet. It dies on the first call where the
 > customer asks 'how much will I pay in March?' and the rep can't answer." — **The Customer Advocate** (simulated lens · Grok-4.5)
@@ -99,11 +116,13 @@ was wrong after already being wrong with nearly half its revenue, and with no
 counterfactual to size the error. One lens called this "testing the parachute after
 jumping."
 
-### 1.3 Without a consumption floor, the model shifts variance onto whoever tolerates it least
+### 1.3 Without a consumption floor, the model shifts variance onto whoever tolerates it least {chip:refuter partial}
 
 The consensus here was less about economics and more about buyer behavior. A pure
 consumption model is fairer on average and worse in the tail — and the legal buyer buys
 precisely to have no tail.
+
+**Weight:** 3/4 lenses
 
 > "Fair on average and unpredictable at the edge is exactly the product this buyer does
 > not want. He pays a premium for predictability; you're proposing to hand the premium
@@ -120,7 +139,11 @@ the kind of detail that decides whether the change is a non-event or a crisis.
 This is the dossier's underlying fork, and it does not dissolve with more analysis: the
 two positions start from different premises about what is scarcest at Meridian today.
 
-🐂 **Essay for moving now, prioritizing margin.** Every quarter on the old model is margin
+🐂 **Thesis: move now, prioritize margin**
+
+**Camp:** The Margin Operator (Kimi K3 and GPT-5.6 Sol) · The Category Strategist (GLM-5.2)
+
+Essay for moving now. Every quarter on the old model is margin
 that never comes back, and the decoupling between cost and revenue is accelerating. The
 current base was sold on an efficiency promise that is being kept — customers are using
 more and paying the same. Delaying is not neutral: it is choosing to subsidize growing
@@ -130,7 +153,11 @@ never even asked for.
 > "Every quarter you delay is margin you hand over for free to a customer who is already
 > happy. Buyer comfort is a choice someone is paying for — in this case, you."
 > — **The Margin Operator** (simulated lens · Kimi K3)
-🐻 **Essay for holding, prioritizing predictability.** The 108% net retention is the
+🐻 **Antithesis: hold, prioritize predictability**
+
+**Camp:** The Customer Advocate (3 models) · The Financial Skeptic (Grok 4.5)
+
+Essay for holding. The 108% net retention is the
 company's most fragile and most valuable asset, and it rests on accumulated trust. Price
 is the one point in the relationship where the customer feels they have lost control.
 Touching it in a concentrated renewal window, without having tested the communication,
@@ -171,7 +198,7 @@ migration wins.
 > everybody pays in support." — **The Category Strategist** (simulated lens · Grok-4.5)
 ## §3 Unique views
 
-### 3.1 The person who approves the budget is not the person who uses the product
+### 3.1 The person who approves the budget is not the person who uses the product {badge:decision-changing:decision-changing}
 
 This surfaced in a single lens, and it survived refutation — the refuter tried to reduce
 it to generic risk aversion and could not, because the proposed mechanism is structural,
@@ -191,7 +218,7 @@ asking how a variable invoice would enter their approval process. If three or mo
 describe structural friction, the mechanism is confirmed and the design changes. It costs
 a week.
 
-### 3.2 The extraction engine can become hostage to the price
+### 3.2 The extraction engine can become hostage to the price {badge:risk:risk}
 
 One lens noted that tying revenue to documents processed creates a perverse internal
 incentive: the product team acquires a reason not to improve extraction efficiency,
@@ -338,6 +365,8 @@ The spread in urgency (2 to 4) and in execution risk (2 to 4) is the map of the 
 
 ### 6.1 The recommendation
 
+🚩 Do not migrate in 90 days. The change is right; the timeline is the risk.
+
 Migrate, with a consumption floor, staggered by renewal window, and not in 90 days. The
 direction is supported by independent convergence across all four lenses; the timeline is
 supported by none of them except one.
@@ -364,7 +393,7 @@ current model is already mischarging a lot of people, and the urgency of the mig
 real and measurable. If it is uniform, the hybrid reorganizes little and the haste is
 unjustified. Owner: product and finance jointly. Gate: no timeline decision before this
 number exists. It costs days, not quarters, and it is the only suggestion on this list
-that cannot be done in parallel with the others — it comes first.
+that cannot be done in parallel with the others — it comes first. ← 1.1 (4/4) · product+finance · days
 
 **2. Set the consumption floor at the 90th percentile of the installed base, not the
 average.** The floor is what turns the change from a bet into a commercial non-event, and
@@ -374,7 +403,7 @@ customers get a predictable invoice and the company still captures the surplus f
 consumers. The mechanism is psychological and budgetary, not economic: what the floor buys
 is the absence of a hard conversation at renewal. Owner: finance. Gate: the floor must be
 defined before any customer communication, because the communication sells the floor, not
-the consumption.
+the consumption. ← fork 2.1 · finance · this cycle
 
 **3. Stagger by renewal window, starting with the contracts that expire latest.** The
 concentration of 40% of the base in a single window eliminates the natural control group,
@@ -383,7 +412,7 @@ with nearly half its revenue. Starting with the distant expirations creates the 
 cohort the current timeline does not allow: the communication gets tested, adjusted, and
 only then reaches the concentrated window. The cost is two quarters of inferior margin;
 the return is the information. Owner: sales. Gate: the concentrated window is not touched
-before ten staggered renewals have been closed and analyzed.
+before ten staggered renewals have been closed and analyzed. ← 1.3 (3/4) · pricing · before any contract
 
 **4. Interview five budget approvers — not users — about how a variable invoice would
 enter their approval process.** This is the test of the §3.1 risk, which surfaced in a
@@ -392,7 +421,7 @@ at a legal buyer tends to be evaluated on not blowing the forecast, and for that
 variability is a career risk, not a better price. If three or more describe structural
 friction in the process, the floor stops being a mitigation and becomes the product — the
 entire communication changes axis. Owner: sales or research. Gate: results on the table
-before the launch message is locked. It costs a week.
+before the launch message is locked. It costs a week. ← 1.2 (3/4) · CS · the whole cycle
 
 **5. Define the billable unit in terms of value delivered, not work consumed.** Billing
 per page processed creates an internal incentive not to improve extraction efficiency,
@@ -401,7 +430,7 @@ customer. Billing per contract analyzed disarms this at the source: the product 
 arbitrarily more efficient without revenue falling. The risk is medium-term, does not
 appear in the first year, and is expensive to undo because it requires touching the price
 yet again. Owner: product. Gate: the choice of unit is reversible now and expensive later
-— decide before launch, not during.
+— decide before launch, not during. ← 3.1 · sales · before the first renewal
 
 ### 6.5 What this dossier does not resolve
 
