@@ -24,7 +24,18 @@ HONEST ABOUT THE THREAT MODEL: the attestation is a plain environment variable. 
 DRIFT for an operator who wants to be caught; it does not resist an adversary who sets the
 variable by hand. Anything stronger needs signing, and signing is not what this is for.
 """
+
 from __future__ import annotations
+
+import os as _os
+import tempfile as _tempfile
+
+# Isolation from the DEVELOPER's configuration, and it must run before high_stakes is imported.
+# `config.home()` falls back to ~/.high-stakes, so a machine with `require_build_check = true`
+# in its own config made this suite fail on code that is fine — the suite measured the
+# environment, not the change. A previous commit claimed to isolate every suite and missed this
+# one; the claim is only true when each entry point sets the variable itself.
+_os.environ["HIGH_STAKES_HOME"] = _tempfile.mkdtemp(prefix="hs-test-home-")
 
 import os
 import subprocess

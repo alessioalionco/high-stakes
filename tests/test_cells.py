@@ -14,6 +14,16 @@ cost money:
   4. **resume is locked by input hash** — reusing by filename would return the
      answer of a prompt that is no longer the same.
 """
+import os as _os
+import tempfile as _tempfile
+
+# Isolation from the DEVELOPER's configuration, and it must run before high_stakes is imported.
+# `config.home()` falls back to ~/.high-stakes, so a machine with `require_build_check = true`
+# in its own config made this suite fail on code that is fine — the suite measured the
+# environment, not the change. A previous commit claimed to isolate every suite and missed this
+# one; the claim is only true when each entry point sets the variable itself.
+_os.environ["HIGH_STAKES_HOME"] = _tempfile.mkdtemp(prefix="hs-test-home-")
+
 import json
 import shutil
 import sys
