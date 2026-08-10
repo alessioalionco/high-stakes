@@ -111,6 +111,14 @@ def main() -> int:
          "excluded from EVERY prose measurement, as the docstring claims",
          [v for k, v in units(quoted).items() if k.endswith("4.1 Lens")][0][1] < 50)
 
+    container = ("### 6.4 Ranked suggestions\n\n**1. First.** " + "w " * 300
+                 + "\n\n**2. Second.** " + "w " * 300 + "\n")
+    case("REGRESSION: a heading whose body is a list of numbered suggestions is a CONTAINER — "
+         "its children carry the caps, and measuring both counted the same words twice against "
+         "two limits (a false red on an approved dossier)",
+         all(t == "container" for k, (t, _) in units(container).items()
+             if k.endswith("6.4 Ranked suggestions")))
+
     # ---- 5. quotes are excluded from the prose measurement ----
     with_quote = ("# T\ncontract: 2\n\n## §0 S\n> "
                   + "a very long verbatim quote — with em-dashes — that cannot be rewritten " * 8

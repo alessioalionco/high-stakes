@@ -145,19 +145,25 @@ def units(md: str) -> dict[str, tuple[str, int]]:
         # long advisor quote was enough to blow the 550-word cap on a legitimate block.
         return len(" ".join(l for l in lines if not l.lstrip().startswith(">")).split())
 
-    def kind(t: str) -> str:
+    def kind(t: str, body: list[str]) -> str:
+        # A heading whose body is a list of numbered suggestions is a CONTAINER, not a unit: its
+        # children already carry their own caps, and measuring both counted the same words twice
+        # against two different limits. That produced a false red on an approved dossier, and the
+        # calibration rule says the gate is what gets fixed.
+        if any(re.match(r"^\*\*\d+\.\s", l) for l in body):
+            return "container"
         return "advisor" if t.startswith("4.") else "fork" if t.startswith("2.") else "item"
 
     for ln in md.splitlines():
         if ln.startswith("### ") or ln.startswith("## "):
             if cur:
-                out[f"{seen}|{cur}"] = (kind(cur), words(buf))
+                out[f"{seen}|{cur}"] = (kind(cur, buf), words(buf))
             seen += 1
             cur, buf = (ln[4:80], []) if ln.startswith("### ") else (None, [])
         elif cur:
             buf.append(ln)
     if cur:
-        out[f"{seen}|{cur}"] = (kind(cur), words(buf))
+        out[f"{seen}|{cur}"] = (kind(cur, buf), words(buf))
 
     # Each numbered Chairman suggestion is its own unit. The LAST one has no successor to bound
     # it: close it on the following heading, never on an arbitrary character count (that is what
@@ -195,7 +201,8 @@ def check_prose(md: str, inv: dict | None = None) -> tuple[list[str], dict]:
     caps = {"advisor": band["palavras_por_conselheiro_max"],
             "fork": band["palavras_por_fork_max"],
             "suggestion": band["palavras_por_sugestao_max"],
-            "item": band.get("palavras_por_item_max", 10 ** 6)}
+            "item": band.get("palavras_por_item_max", 10 ** 6),
+            "container": 10 ** 6}   # children carry the caps; see kind()
     oversized = {k: n for k, (t, n) in units(md).items() if n > caps[t]}
 
     fails = []
