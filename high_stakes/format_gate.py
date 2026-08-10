@@ -22,9 +22,13 @@ The cap lives on the UNIT (advisor, fork, suggestion), never on the section: §4
 number of lenses, and §6.4 has a contractual FLOOR of 400 characters per suggestion — capping the
 section would have contradicted a floor that already existed.
 
-Contract versioning: a dossier declaring `contract: 2` is held to the inventory. One without the
-marker is contract 1 and is SKIPPED — rewriting a delivered dossier would destroy the provenance
-of what was decided at the time.
+Contract versioning, and it FAILS CLOSED. A dossier is held to the inventory unless its HEADER
+declares an older contract on purpose (`contract: 1`). Absence of the marker means the current
+contract, not an exemption: the first cut had it backwards, so deleting one line switched the
+whole gate off and any dossier that forgot the header shipped ungated. Both reviewers found it
+independently and both called it a merge blocker. Declaring `contract: 1` still exempts a
+delivered dossier — rewriting one would destroy the provenance of what was decided at the time —
+but that opt-out is now written where a reader can see it.
 
 Usage:
     python3 -m high_stakes.format_gate <report.md> <report.html>   # both checks
