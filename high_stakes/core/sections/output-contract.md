@@ -59,6 +59,46 @@ drill-down: "on 2.3, I'm left with doubt X"):
 nav, @media print (⌘P → PDF), groundedness rendered (**solid border = verified, dashed =
 claim/suppressed**), zero external dependency.
 
+### The ratified vocabulary — components, not prose in a box
+
+The physical format is a fixed set of COMPONENTS, listed in `assets/format-inventory.json` and
+checked by `format_gate.py`. Prose alone does not satisfy the contract:
+
+| Where | Component | Markdown that produces it |
+|---|---|---|
+| §0 | executive box | the section body (no convention needed) |
+| §1 | convergence matrix | a normal table whose cells carry `✓` / `·` and `n/m` |
+| §1–§3 | weight bar · evidence chip · type badge | `**Weight:** 7/8 lenses` · `{chip:…}` · `{badge:risk:label}` |
+| §2 | fork CARD with header, body and foot | a `### N.M` item inside §2 |
+| §2 | named camps | `**Camp:** Lens (model) · Lens (model)` under each 🐂/🐻 |
+| §4 | advisor block with axis line, epigraph, Q&A, score strip, verdict close | a `### N.M` item inside §4 + `**Strip:**` + `**In one sentence:**` |
+| §5–§6 | flagged recommendation | a line opening with 🚩 or ✅ |
+| §6.4 | ranked list with a source trail | `**N. Title.** body ←source · owner · when` |
+| any | correlation caveat | a line opening with ⚠️ |
+
+**Why this is a gate and not advice.** Between July and August 2026 the renderer emitted 12 of
+the 53 ratified classes. Fork cards, advisor blocks, camps, the matrix, weight bars, chips, score
+strips and the source trail were specified, approved, styled — and never emitted. Nothing went
+red, because the structural gate measures DEPTH and the quote verifier measures FIDELITY; neither
+sees FORM. The same blind spot hid a second defect: the renderer emitted one `<p>` per SOURCE
+LINE, so every soft-wrapped paragraph shattered into fragments (287 paragraph tags in the
+reference dossier, 240 of them under 90 characters).
+
+**Prose band.** `format_gate.py` also holds the writing to the profile measured on the ratified
+exemplar: mean sentence ≤ 28 words, em-dashes ≤ 15 per thousand, no paragraph over 900
+characters, and a cap per UNIT (advisor, fork, suggestion). The cap is never per SECTION: §4 grows
+with the number of lenses, and §6.4 has a contractual floor of 400 characters per suggestion, so
+capping the section would contradict a floor that already exists. Verbatim quotes are excluded
+from every prose measurement — they cannot be edited to satisfy style without breaking R6.
+
+**Calibration rule (load-bearing):** if the gate rejects the RATIFIED artifact, the gate is wrong,
+not the artifact. That rule has already caught two real bugs in the gate itself.
+
+**Contract version.** A dossier declares `contract: N` on the line after its H1. The inventory
+carries the current version; a dossier declaring less is SKIPPED by the format gate. Delivered
+dossiers are frozen, never rewritten — reworking one would destroy the provenance of what was
+actually decided at the time.
+
 ## Layer 3 — the A–F → § map (the stitching)
 The §0–§7 skeleton **never changes**; the A–F contract types the CONTENT of the slots. The readback's
 backward generator generates upstream (seats, yardstick, agenda); at render it only parameterizes.
@@ -137,9 +177,18 @@ ceiling — the gate never tightens the defined bar on its own):**
   §6.5 and §6.6 present as their own headings.
 - §7: discarded-and-why + method-honesty + drill-down.
 
-**R5 — Mandatory mechanical validation.** Run the **structural verifier pointed to by the adapter**
-and get **exit 0** before delivering. Red gate =
+**R5 — Mandatory mechanical validation.** Run all THREE verifiers pointed to by the adapter and
+get **exit 0** from each before delivering:
+
+```
+render_gate  <report.md>                  # depth: sections, paragraph floors, jargon
+qverify      <report.md> <cells_dir>      # fidelity: every quote verbatim from its card
+format_gate  <report.md> <report.html>    # form: ratified components + prose band
+```
+
+A gate nobody invokes is the same as no gate — that is literally how the format regressed. Red gate =
 fix and re-run; delivering with a red gate is a contract violation, not editorial judgment.
+The format gate is what stops the ratified components from quietly disappearing again.
 The verifier is the floor (structure + jargon by code family); R1-R4 keep applying to what
 code does not measure (voice, nuance, altitude) — quote fidelity IS measured by code, in R6.
 

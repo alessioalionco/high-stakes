@@ -11,6 +11,7 @@
 #
 #   bin/high-stakes render_gate <report.md>
 #   bin/high-stakes qverify <report.md> <cells_dir>
+#   bin/high-stakes format_gate <report.md> <report.html>
 #   bin/high-stakes render_dossier <report.md> [out.html]
 #   bin/high-stakes paths core
 #   bin/high-stakes config
@@ -18,7 +19,7 @@ set -eu
 
 if [ "$#" -lt 1 ]; then
     echo "usage: high-stakes <command> [args...]" >&2
-    echo "commands: render_gate · qverify · render_dossier · paths · config" >&2
+    echo "commands: render_gate · qverify · format_gate · render_dossier · paths · config" >&2
     exit 2
 fi
 

@@ -1,0 +1,128 @@
+{
+  "_doc": "Inventory of the RATIFIED dossier format (16 Jul 2026 sample, re-ratified 9 Aug 2026). Every class here was approved by the decider and exists in the published CSS. The format gate fails when the renderer stops emitting a REQUIRED class - that is how 41 of 53 disappeared with no red test between July and August 2026.",
+  "_ratificado_em": "2026-08-09 (re-ratificação sobre o TESTE-C; ratificação original 16/Jul)",
+  "required": {
+    "resumo": [
+      "exec"
+    ],
+    "convergentes": [
+      "idtag",
+      "check",
+      "nocheck",
+      "pesobar",
+      "chip",
+      "caveat"
+    ],
+    "conselho": [
+      "advisor",
+      "role",
+      "thesis",
+      "qa",
+      "scorestrip",
+      "sc",
+      "quote",
+      "who",
+      "big"
+    ],
+    "agenda": [
+      "reco"
+    ],
+    "forks": [
+      "fork",
+      "hd",
+      "body",
+      "foot"
+    ]
+  },
+  "optional": [
+    "watermark",
+    "iconbtn",
+    "dot",
+    "anchor",
+    "secnum",
+    "lead",
+    "grp",
+    "inner",
+    "center",
+    "cond",
+    "yes",
+    "no",
+    "b-flaw",
+    "b-assum",
+    "b-risk",
+    "b-oq",
+    "b-dc",
+    "b-acatado"
+  ],
+  "prosa": {
+    "_doc": "Perfil medido no exemplar ratificado. Banda = tolerância; fora dela o gate reclama.",
+    "referencia": {
+      "palavras_por_frase": 24.2,
+      "travessoes_por_mil": 11.8,
+      "paragrafos_acima_900c": 0,
+      "maior_secao_palavras": 978,
+      "palavras_por_conselheiro_mediana": 431,
+      "palavras_por_conselheiro_max": 455,
+      "palavras_por_sugestao_mediana": 90,
+      "palavras_por_sugestao_max": 123,
+      "palavras_por_fork_mediana": 502,
+      "palavras_por_fork_max": 527
+    },
+    "banda": {
+      "palavras_por_frase_max": 28.0,
+      "travessoes_por_mil_max": 15.0,
+      "paragrafos_acima_900c_max": 0,
+      "palavras_por_conselheiro_max": 550,
+      "palavras_por_fork_max": 650,
+      "palavras_por_sugestao_max": 160,
+      "_calibragem": "Medido no exemplar ratificado, com folga. Regra: se o gate reprova o artefato RATIFICADO, o gate esta errado, nao o artefato.",
+      "palavras_por_item_max": 900,
+      "_unidade_sem_tipo": "Uma unidade que nao casa com nenhum tipo usa o teto de item. Antes a chave nao existia e o .get() devolvia 1.000.000: teto infinito silencioso."
+    },
+    "_nota_teto_de_secao": "Teto por SECAO foi rejeitado duas vezes na medicao: a secao do conselho cresce com o numero de lentes, e a 6.4 tem piso de 400 caracteres POR sugestao no contrato — capar a secao contradizia um piso existente. O teto vive na UNIDADE: conselheiro, fork, sugestao."
+  },
+  "contract_version": 2,
+  "_contract_version_doc": "Dossiers declaring 'contract: 2' in the header are held to this inventory. A dossier without the marker is contract 1 (pre-2026-08-09) and the format gate skips it: rewriting a delivered dossier would destroy the provenance of what was decided at the time.",
+  "conditional": {
+    "_doc": "Required only when the trigger is present in the markdown. A CONTESTED fork carries bull/bear/camp; a CONDITIONAL fork omits them BY CONTRACT (fabricating a bear where the board converged is rigor theater), so demanding them unconditionally guarantees a false red on a legitimate dossier.",
+    "contested_fork": {
+      "trigger": "🐂",
+      "classes": [
+        "side",
+        "bull",
+        "bear",
+        "camp"
+      ]
+    },
+    "unique_views": {
+      "trigger": "{badge:",
+      "classes": [
+        "badge"
+      ]
+    },
+    "ranked_suggestions": {
+      "trigger": "←",
+      "classes": [
+        "fifteen",
+        "src"
+      ]
+    }
+  },
+  "not_built": {
+    "_doc": "Declared, NOT built. Listing these as `required` would have made the gate green over a promise the renderer does not keep — the failure this whole file exists to stop.",
+    "per_item_groundedness": "The contract renders evidence-anchored vs unverified as a solid vs dashed border PER ITEM. The renderer applies neither; it only printed a legend explaining the convention. The legend was removed rather than left decorating an unimplemented feature. Build trigger: cards carrying a groundedness tag reach the renderer."
+  },
+  "chrome": {
+    "_doc": "Page furniture the renderer always emits: checked against the WHOLE document. Deleting the sticky nav is a real regression, but chrome must never vouch for CONTENT — that is why the two scopes are separate.",
+    "classes": [
+      "top",
+      "brand",
+      "wrap",
+      "titleblock",
+      "kicker",
+      "meta",
+      "sub"
+    ]
+  },
+  "_scopes": "chrome -> whole document · required/conditional -> CONTENT region only (header and title block stripped). Counting everything made 13 classes unfalsifiable: they were green on a document with one sentence and zero components."
+}
